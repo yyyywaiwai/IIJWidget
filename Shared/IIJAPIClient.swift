@@ -2,6 +2,7 @@ import Foundation
 
 enum IIJAPIClientError: LocalizedError {
     case invalidCredentials
+    case invalidSession
     case invalidURL(String)
     case invalidResponse
     case httpError(Int)
@@ -10,6 +11,8 @@ enum IIJAPIClientError: LocalizedError {
         switch self {
         case .invalidCredentials:
             return "資格情報が設定されていません"
+        case .invalidSession:
+            return "有効なセッションが見つかりませんでした"
         case .invalidURL(let path):
             return "無効なURL: \(path)"
         case .invalidResponse:
@@ -35,7 +38,8 @@ final class IIJAPIClient {
         config.waitsForConnectivity = true
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
-        config.httpCookieStorage = HTTPCookieStorage.sharedCookieStorage(forGroupContainerIdentifier: AppGroup.identifier)
+        let storage = HTTPCookieStorage.sharedCookieStorage(forGroupContainerIdentifier: AppGroup.identifier)
+        config.httpCookieStorage = storage
         config.sharedContainerIdentifier = AppGroup.identifier
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
@@ -50,15 +54,21 @@ final class IIJAPIClient {
         }
 
         return try await performWithAutoLogin(credentials: credentials) {
-            let top = try await fetchTop()
-            let bill = try await fetchBillSummary()
-            let status = try await fetchServiceStatus()
-            return AggregatePayload(
-                fetchedAt: Date(),
-                top: top,
-                bill: bill,
-                serviceStatus: status
-            )
+            try await buildAggregatePayload()
+        }
+    }
+
+    func fetchUsingExistingSession() async throws -> AggregatePayload {
+        do {
+            let payload = try await buildAggregatePayload()
+            hasValidSession = true
+            return payload
+        } catch {
+            invalidateSession()
+            if isAuthenticationError(error) {
+                throw IIJAPIClientError.invalidSession
+            }
+            throw error
         }
     }
 
@@ -130,7 +140,7 @@ final class IIJAPIClient {
         do {
             return try await operation()
         } catch {
-            guard shouldRetryWithLogin(for: error) else {
+            guard isAuthenticationError(error) else {
                 throw error
             }
         }
@@ -140,7 +150,7 @@ final class IIJAPIClient {
         return try await operation()
     }
 
-    private func shouldRetryWithLogin(for error: Error) -> Bool {
+    func isAuthenticationError(_ error: Error) -> Bool {
         if case IIJAPIClientError.httpError(let code) = error {
             return code == 401 || code == 403 || code == 419
         }
@@ -184,6 +194,18 @@ final class IIJAPIClient {
 
     private func invalidateSession() {
         hasValidSession = false
+    }
+
+    private func buildAggregatePayload() async throws -> AggregatePayload {
+        let top = try await fetchTop()
+        let bill = try await fetchBillSummary()
+        let status = try await fetchServiceStatus()
+        return AggregatePayload(
+            fetchedAt: Date(),
+            top: top,
+            bill: bill,
+            serviceStatus: status
+        )
     }
 
     private func decodeAPIErrorIfNeeded(from data: Data) throws -> String? {

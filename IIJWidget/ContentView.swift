@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = AppViewModel()
     @FocusState private var focusedField: Field?
+    @Environment(\.scenePhase) private var scenePhase
 
     enum Field {
         case mioId
@@ -34,6 +35,13 @@ struct ContentView: View {
                 }
             }
         }
+        .task {
+            await viewModel.triggerAutomaticRefreshIfNeeded()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            Task { await viewModel.triggerAutomaticRefreshIfNeeded() }
+        }
     }
 
     private var credentialsSection: some View {
@@ -41,27 +49,52 @@ struct ContentView: View {
             Text("アカウント")
                 .font(.headline)
 
-            TextField("mioID / メールアドレス", text: $viewModel.mioId)
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
-                .focused($focusedField, equals: .mioId)
+            if viewModel.credentialFieldsHidden {
+                Label("自動ログイン済み", systemImage: "checkmark.shield")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
 
-            SecureField("パスワード", text: $viewModel.password)
-                .textFieldStyle(.roundedBorder)
-                .focused($focusedField, equals: .password)
+                if let status = viewModel.loginStatusText {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
 
-            Text("入力した資格情報は端末のキーチェーンに暗号化して保存され、次回起動時に自動で入力されます。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Button {
+                    viewModel.revealCredentialFields()
+                } label: {
+                    Label("資格情報を再設定", systemImage: "pencil")
+                }
+                .buttonStyle(.bordered)
+            } else {
+                TextField("mioID / メールアドレス", text: $viewModel.mioId)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .mioId)
+
+                SecureField("パスワード", text: $viewModel.password)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .password)
+
+                if let status = viewModel.loginStatusText {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("入力した資格情報は端末のキーチェーンに暗号化して保存され、次回起動時に自動で入力されます。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var fetchButton: some View {
         Button {
             focusedField = nil
-            Task { await viewModel.fetchLatest() }
+            viewModel.refreshManually()
         } label: {
             HStack {
                 Image(systemName: "arrow.down.circle")
@@ -77,7 +110,7 @@ struct ContentView: View {
     private var stateSection: some View {
         switch viewModel.state {
         case .idle:
-            placeholderView(text: "mioID とパスワードを入力して取得してください。")
+            placeholderView(text: "アプリ起動時に自動取得します。初回は mioID とパスワードを入力してください。")
 
         case .loading:
             HStack(spacing: 12) {

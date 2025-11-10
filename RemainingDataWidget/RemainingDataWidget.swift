@@ -7,28 +7,28 @@ struct RemainingDataEntry: TimelineEntry {
     let snapshot: WidgetSnapshot?
 }
 
-struct RemainingDataProvider: TimelineProvider {
+struct RemainingDataProvider: AppIntentTimelineProvider {
+    typealias Intent = RemainingDataConfigurationIntent
     private let store = WidgetDataStore()
 
     func placeholder(in context: Context) -> RemainingDataEntry {
         RemainingDataEntry(date: Date(), snapshot: .placeholder)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (RemainingDataEntry) -> Void) {
+    func snapshot(for configuration: RemainingDataConfigurationIntent, in context: Context) async -> RemainingDataEntry {
         if context.isPreview {
-            completion(RemainingDataEntry(date: Date(), snapshot: .placeholder))
-        } else {
-            let snapshot = store.loadSnapshot()
-            completion(RemainingDataEntry(date: snapshot?.fetchedAt ?? Date(), snapshot: snapshot))
+            return RemainingDataEntry(date: Date(), snapshot: .placeholder)
         }
+        let snapshot = store.loadSnapshot()
+        return RemainingDataEntry(date: snapshot?.fetchedAt ?? Date(), snapshot: snapshot)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<RemainingDataEntry>) -> Void) {
+    func timeline(for configuration: RemainingDataConfigurationIntent, in context: Context) async -> Timeline<RemainingDataEntry> {
         let snapshot = store.loadSnapshot()
         let entryDate = snapshot?.fetchedAt ?? Date()
         let entry = RemainingDataEntry(date: entryDate, snapshot: snapshot)
         let refresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
-        completion(Timeline(entries: [entry], policy: .after(refresh)))
+        return Timeline(entries: [entry], policy: .after(refresh))
     }
 }
 
@@ -87,10 +87,11 @@ struct RemainingDataWidgetEntryView: View {
                 Text(service.serviceName)
                     .font(.caption)
                     .fontWeight(.semibold)
-                Gauge(value: service.usedRatio) {
-                    Text("使用")
-                }
-                .gaugeStyle(.accessoryLinear)
+                FilledLinearMeter(
+                    ratio: remainingRatio(for: service),
+                    colors: ringColors(for: remainingRatio(for: service))
+                )
+                .frame(height: 8)
                 Text("残量 \(shortGB(service.remainingGB)) / \(shortGB(service.totalCapacityGB))")
                     .font(.footnote)
             } else {
@@ -161,16 +162,16 @@ struct RemainingDataWidgetEntryView: View {
         }
     }
 
-    private func circularMeter(for service: WidgetServiceSnapshot, size: CGFloat) -> some View {
+    private func circularMeter(for service: WidgetServiceSnapshot, size: CGFloat, lineWidth: CGFloat = 10) -> some View {
         let ratio = min(max(service.remainingGB / service.totalCapacityGB, 0), 1)
         return ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.2), lineWidth: 10)
+                .stroke(Color.white.opacity(0.2), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: CGFloat(max(0.05, 1 - service.usedRatio)))
                 .stroke(
                     AngularGradient(colors: ringColors(for: ratio), center: .center),
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 2) {
@@ -231,6 +232,11 @@ struct RemainingDataWidgetEntryView: View {
         String(format: "%.2fGB", value)
     }
 
+    private func remainingRatio(for service: WidgetServiceSnapshot) -> Double {
+        guard service.totalCapacityGB > 0 else { return 0 }
+        return min(max(service.remainingGB / service.totalCapacityGB, 0), 1)
+    }
+
     private func formatted(date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .none
@@ -239,11 +245,30 @@ struct RemainingDataWidgetEntryView: View {
     }
 }
 
+private struct FilledLinearMeter: View {
+    let ratio: Double
+    let colors: [Color]
+
+    var body: some View {
+        GeometryReader { proxy in
+            let clamped = min(max(ratio, 0), 1)
+            let width = proxy.size.width * clamped
+            Capsule()
+                .fill(Color.white.opacity(0.2))
+            Capsule()
+                .fill(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
+                .frame(width: max(width, proxy.size.height))
+        }
+        .compositingGroup()
+        .clipped()
+    }
+}
+
 struct RemainingDataWidget: Widget {
     let kind = WidgetKind.remainingData
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: RemainingDataProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: RemainingDataConfigurationIntent.self, provider: RemainingDataProvider()) { entry in
             RemainingDataWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("データ残量")
