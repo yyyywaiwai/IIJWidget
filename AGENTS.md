@@ -1,5 +1,5 @@
 # Repository Guidelines
-
+英語でthinkして日本語で出力すること
 ## Project Structure & Module Organization
 - `IIJWidget/` hosts the main SwiftUI app and widget targets plus their asset catalogs and entitlements.
 - `RemainingDataWidget/` contains the widget extension entry points, intents, and configuration lists for the data reminder.
