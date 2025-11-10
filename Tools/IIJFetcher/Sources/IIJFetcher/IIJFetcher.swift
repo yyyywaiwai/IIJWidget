@@ -15,6 +15,8 @@ enum Command: String, CaseIterable {
     case bill
     case status
     case all
+    case usage
+    case daily
 }
 
 struct CLIOptions {
@@ -97,6 +99,53 @@ struct AggregatePayload: Codable {
     let top: MemberTopResponse
     let bill: BillSummaryResponse
     let serviceStatus: ServiceStatusResponse
+    let monthlyUsage: [MonthlyUsageService]
+    let dailyUsage: [DailyUsageService]
+
+    private enum CodingKeys: String, CodingKey {
+        case fetchedAt
+        case top
+        case bill
+        case serviceStatus
+        case monthlyUsage
+        case dailyUsage
+    }
+
+    init(
+        fetchedAt: Date,
+        top: MemberTopResponse,
+        bill: BillSummaryResponse,
+        serviceStatus: ServiceStatusResponse,
+        monthlyUsage: [MonthlyUsageService],
+        dailyUsage: [DailyUsageService]
+    ) {
+        self.fetchedAt = fetchedAt
+        self.top = top
+        self.bill = bill
+        self.serviceStatus = serviceStatus
+        self.monthlyUsage = monthlyUsage
+        self.dailyUsage = dailyUsage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fetchedAt = try container.decode(Date.self, forKey: .fetchedAt)
+        top = try container.decode(MemberTopResponse.self, forKey: .top)
+        bill = try container.decode(BillSummaryResponse.self, forKey: .bill)
+        serviceStatus = try container.decode(ServiceStatusResponse.self, forKey: .serviceStatus)
+        monthlyUsage = try container.decodeIfPresent([MonthlyUsageService].self, forKey: .monthlyUsage) ?? []
+        dailyUsage = try container.decodeIfPresent([DailyUsageService].self, forKey: .dailyUsage) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fetchedAt, forKey: .fetchedAt)
+        try container.encode(top, forKey: .top)
+        try container.encode(bill, forKey: .bill)
+        try container.encode(serviceStatus, forKey: .serviceStatus)
+        try container.encode(monthlyUsage, forKey: .monthlyUsage)
+        try container.encode(dailyUsage, forKey: .dailyUsage)
+    }
 }
 
 @main
@@ -117,15 +166,25 @@ struct IIJFetcherCLI {
             case .status:
                 let data = try await client.fetchServiceStatus()
                 try emitJSON(data)
+            case .usage:
+                let data = try await client.fetchMonthlyUsage()
+                try emitJSON(data)
+            case .daily:
+                let data = try await client.fetchDailyUsage()
+                try emitJSON(data)
             case .all:
                 let top = try await client.fetchTop()
                 let bill = try await client.fetchBillSummary()
                 let status = try await client.fetchServiceStatus()
+                let usage = try await client.fetchMonthlyUsage()
+                let daily = try await client.fetchDailyUsage()
                 let payload = AggregatePayload(
                     fetchedAt: Date(),
                     top: top,
                     bill: bill,
-                    serviceStatus: status
+                    serviceStatus: status,
+                    monthlyUsage: usage,
+                    dailyUsage: daily
                 )
                 try emitJSON(payload)
             }
@@ -254,7 +313,67 @@ final class IIJAPIClient {
         return try decoder.decode(ServiceStatusResponse.self, from: data)
     }
 
-    private func request(path: String, method: String, body: Data? = nil) async throws -> Data {
+    func fetchMonthlyUsage() async throws -> [MonthlyUsageService] {
+        let landingData = try await request(path: "/service/setup/hdc/viewmonthlydata/", method: "GET", contentType: nil)
+        guard let landingHTML = String(data: landingData, encoding: .utf8) else { return [] }
+        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let forms = landingParser.extractLandingPageForms().forms
+        guard !forms.isEmpty else { return [] }
+
+        var services: [MonthlyUsageService] = []
+        for form in forms {
+            guard let body = formURLEncoded([
+                "hdoCode": form.hdoCode,
+                "_csrf": form.csrfToken
+            ]) else { continue }
+
+            let response = try await request(
+                path: "/service/setup/hdc/viewmonthlydata/",
+                method: "POST",
+                body: body,
+                contentType: "application/x-www-form-urlencoded"
+            )
+            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
+            let detailParser = DataUsageHTMLParser(html: detailHTML)
+            if let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode) {
+                services.append(service)
+            }
+        }
+
+        return services
+    }
+
+    func fetchDailyUsage() async throws -> [DailyUsageService] {
+        let landingData = try await request(path: "/service/setup/hdc/viewdailydata/", method: "GET", contentType: nil)
+        guard let landingHTML = String(data: landingData, encoding: .utf8) else { return [] }
+        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let forms = landingParser.extractLandingPageForms().forms
+        guard !forms.isEmpty else { return [] }
+
+        var services: [DailyUsageService] = []
+        for form in forms {
+            guard let body = formURLEncoded([
+                "hdoCode": form.hdoCode,
+                "_csrf": form.csrfToken
+            ]) else { continue }
+
+            let response = try await request(
+                path: "/service/setup/hdc/viewdailydata/",
+                method: "POST",
+                body: body,
+                contentType: "application/x-www-form-urlencoded"
+            )
+            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
+            let detailParser = DataUsageHTMLParser(html: detailHTML)
+            if let service = detailParser.parseDailyService(hdoCode: form.hdoCode) {
+                services.append(service)
+            }
+        }
+
+        return services
+    }
+
+    private func request(path: String, method: String, body: Data? = nil, contentType: String? = "application/json") async throws -> Data {
         guard let url = URL(string: "https://www.iijmio.jp\(path)") else {
             throw CLIError(message: "無効なURL: \(path)")
         }
@@ -263,7 +382,9 @@ final class IIJAPIClient {
         request.timeoutInterval = 30
         if let body = body {
             request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let contentType {
+                request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            }
         }
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -286,5 +407,12 @@ final class IIJAPIClient {
         if let errorCode = try decodeAPIErrorIfNeeded(from: data) {
             throw CLIError(message: "APIエラー: \(errorCode)")
         }
+    }
+
+    private func formURLEncoded(_ params: [String: String]) -> Data? {
+        var components = URLComponents()
+        components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let query = components.percentEncodedQuery else { return nil }
+        return query.data(using: .utf8)
     }
 }

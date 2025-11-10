@@ -161,6 +161,16 @@ struct UsageSummaryView: View {
                 ServiceInfoCard(info: info)
             }
 
+            if !payload.monthlyUsage.isEmpty {
+                Divider()
+                MonthlyUsageSection(services: payload.monthlyUsage)
+            }
+
+            if !payload.dailyUsage.isEmpty {
+                Divider()
+                DailyUsageSection(services: payload.dailyUsage)
+            }
+
             Divider()
 
             BillSummaryList(bill: payload.bill)
@@ -245,6 +255,132 @@ struct BillSummaryList: View {
                 Divider()
             }
         }
+    }
+}
+
+struct MonthlyUsageSection: View {
+    let services: [MonthlyUsageService]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("月別データ利用量")
+                .font(.headline)
+
+            ForEach(services) { service in
+                MonthlyUsageServiceCard(service: service)
+            }
+        }
+    }
+}
+
+struct MonthlyUsageServiceCard: View {
+    let service: MonthlyUsageService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(service.titlePrimary)
+                .font(.subheadline.bold())
+            if let detail = service.titleDetail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            ForEach(service.entries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(entry.monthLabel)
+                            .font(.callout)
+                            .monospacedDigit()
+                        Spacer()
+                        if entry.hasData {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("高速: \(entry.highSpeedText ?? "-")")
+                                Text("低速: \(entry.lowSpeedText ?? "-")")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        } else if let note = entry.note {
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                if entry.id != service.entries.last?.id {
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct DailyUsageSection: View {
+    let services: [DailyUsageService]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("日別データ利用量")
+                .font(.headline)
+
+            ForEach(services) { service in
+                DailyUsageServiceCard(service: service)
+            }
+        }
+    }
+}
+
+struct DailyUsageServiceCard: View {
+    let service: DailyUsageService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(service.titlePrimary)
+                .font(.subheadline.bold())
+            if let detail = service.titleDetail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            ForEach(service.entries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(entry.dateLabel)
+                            .font(.callout)
+                            .monospacedDigit()
+                        Spacer()
+                        if entry.hasData {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("高速: \(entry.highSpeedText ?? "-")")
+                                Text("低速: \(entry.lowSpeedText ?? "-")")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        } else if let note = entry.note {
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                if entry.id != service.entries.last?.id {
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

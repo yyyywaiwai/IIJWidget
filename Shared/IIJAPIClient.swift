@@ -109,7 +109,80 @@ final class IIJAPIClient {
         return try decoder.decode(ServiceStatusResponse.self, from: data)
     }
 
-    private func request(path: String, method: String, body: Data? = nil) async throws -> Data {
+    private func fetchMonthlyUsage() async throws -> [MonthlyUsageService] {
+        let landingData = try await request(path: "/service/setup/hdc/viewmonthlydata/", method: "GET", contentType: nil)
+        guard let landingHTML = String(data: landingData, encoding: .utf8) else {
+            return []
+        }
+
+        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let landing = landingParser.extractLandingPageForms()
+        guard !landing.forms.isEmpty else { return [] }
+
+        var services: [MonthlyUsageService] = []
+        for form in landing.forms {
+            guard let body = formURLEncoded([
+                "hdoCode": form.hdoCode,
+                "_csrf": form.csrfToken
+            ]) else { continue }
+
+            let response = try await request(
+                path: "/service/setup/hdc/viewmonthlydata/",
+                method: "POST",
+                body: body,
+                contentType: "application/x-www-form-urlencoded"
+            )
+            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
+            let detailParser = DataUsageHTMLParser(html: detailHTML)
+            if let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode) {
+                services.append(service)
+            }
+        }
+
+        return services
+    }
+
+    private func fetchDailyUsage() async throws -> [DailyUsageService] {
+        let landingData = try await request(path: "/service/setup/hdc/viewdailydata/", method: "GET", contentType: nil)
+        guard let landingHTML = String(data: landingData, encoding: .utf8) else {
+            return []
+        }
+
+        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let landing = landingParser.extractLandingPageForms()
+        guard !landing.forms.isEmpty else { return [] }
+
+        var services: [DailyUsageService] = []
+        for form in landing.forms {
+            guard let body = formURLEncoded([
+                "hdoCode": form.hdoCode,
+                "_csrf": form.csrfToken
+            ]) else { continue }
+
+            let response = try await request(
+                path: "/service/setup/hdc/viewdailydata/",
+                method: "POST",
+                body: body,
+                contentType: "application/x-www-form-urlencoded"
+            )
+            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
+            let detailParser = DataUsageHTMLParser(html: detailHTML)
+            if let service = detailParser.parseDailyService(hdoCode: form.hdoCode) {
+                services.append(service)
+            }
+        }
+
+        return services
+    }
+
+    private func formURLEncoded(_ parameters: [String: String]) -> Data? {
+        var components = URLComponents()
+        components.queryItems = parameters.map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let query = components.percentEncodedQuery else { return nil }
+        return query.data(using: .utf8)
+    }
+
+    private func request(path: String, method: String, body: Data? = nil, contentType: String? = "application/json") async throws -> Data {
         guard let url = URL(string: "https://www.iijmio.jp\(path)") else {
             throw IIJAPIClientError.invalidURL(path)
         }
@@ -119,7 +192,9 @@ final class IIJAPIClient {
         request.timeoutInterval = 30
         if let body {
             request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let contentType {
+                request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            }
         }
 
         let (data, response) = try await session.data(for: request)
@@ -197,14 +272,18 @@ final class IIJAPIClient {
     }
 
     private func buildAggregatePayload() async throws -> AggregatePayload {
-        let top = try await fetchTop()
-        let bill = try await fetchBillSummary()
-        let status = try await fetchServiceStatus()
+        async let top = fetchTop()
+        async let bill = fetchBillSummary()
+        async let status = fetchServiceStatus()
+        async let usage = fetchMonthlyUsage()
+        async let daily = fetchDailyUsage()
         return AggregatePayload(
             fetchedAt: Date(),
-            top: top,
-            bill: bill,
-            serviceStatus: status
+            top: try await top,
+            bill: try await bill,
+            serviceStatus: try await status,
+            monthlyUsage: try await usage,
+            dailyUsage: try await daily
         )
     }
 

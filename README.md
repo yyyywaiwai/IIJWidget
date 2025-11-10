@@ -3,10 +3,10 @@
 IIJWidget は IIJmio 会員サイトの非公開 API を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報は端末のキーチェーンと App Group コンテナに保存され、アプリとウィジェットの双方で安全に共有されます。
 
 ## 特徴
-- **SwiftUI アプリ (`IIJWidget/`)**: mioID とパスワードを保存し、残量カード・請求一覧・回線状態を 1 画面で確認できます。
+- **SwiftUI アプリ (`IIJWidget/`)**: mioID とパスワードを保存し、残量カード・請求一覧・回線状態に加えて、会員サイト準拠の月別/日別データ利用量テーブルも 1 画面で確認できます。
 - **ウィジェット拡張 (`RemainingDataWidget/`)**: アクセサリ/システムサイズごとのレイアウトを備え、30 分ごとに `WidgetDataStore` から最新スナップショットを読み込みます。iOS 17 では App Intents を使った手動リフレッシュにも対応。
 - **共有レイヤー (`Shared/`)**: `IIJAPIClient`、`CredentialStore`、`WidgetRefreshService` などをまとめ、App Group と Keychain を通じてデータを再利用します。
-- **CLI ツール (`Tools/IIJFetcher`)**: API エンドポイントの動作確認やデバッグに使える SwiftPM ベースのフェッチャーを同梱。
+- **CLI ツール (`Tools/IIJFetcher`)**: API エンドポイントの動作確認やデバッグに使える SwiftPM ベースのフェッチャーを同梱。`--mode usage` で月別、`--mode daily` で直近 30 日分の日別利用量を JSON 取得できます。
 - **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要 API とレスポンス項目を整理し、実装とスクリプトを同期しやすくしています。
 
 ## ディレクトリ構成
@@ -33,7 +33,11 @@ docs/                # エンドポイント定義などの補助資料
 5. CLI で API を確認する場合:
    ```bash
    cd Tools/IIJFetcher
+   # すべてのデータをまとめて取得
    swift run IIJFetcher --mode all --mio-id <ID> --password <PW>
+
+   # 日別データ利用量だけを確認
+   swift run IIJFetcher --mode daily --mio-id <ID> --password <PW>
    ```
    もしくは `IIJ_MIO_ID` / `IIJ_PASSWORD` を環境変数で渡せます。
 
@@ -46,6 +50,7 @@ docs/                # エンドポイント定義などの補助資料
 - API 仕様の詳細は `docs/iij_endpoints.md` を参照してください。エンドポイントやレスポンス構造を更新した場合はドキュメントも合わせて更新します。
 - `Shared/CredentialStore.swift` は Keychain のアクセルグループを自動移行するため、既存ユーザーでもウィジェットへシームレスに移行できます。
 - `WidgetRefreshService` は App Group の共有ディレクトリに JSON スナップショットを保存し、ウィジェットがオフラインでも最後の成功値を表示できるようにしています。
+- `Shared/DataUsageParser.swift` は `viewmonthlydata` / `viewdailydata` HTML を共通モデルにパースするための処理をまとめています。会員サイトのテーブル構造が変わった場合はここを更新してください。
 
 ## セキュリティ上の注意
 - 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。

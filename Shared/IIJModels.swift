@@ -84,6 +84,53 @@ struct AggregatePayload: Codable {
     let top: MemberTopResponse
     let bill: BillSummaryResponse
     let serviceStatus: ServiceStatusResponse
+    let monthlyUsage: [MonthlyUsageService]
+    let dailyUsage: [DailyUsageService]
+
+    init(
+        fetchedAt: Date,
+        top: MemberTopResponse,
+        bill: BillSummaryResponse,
+        serviceStatus: ServiceStatusResponse,
+        monthlyUsage: [MonthlyUsageService],
+        dailyUsage: [DailyUsageService]
+    ) {
+        self.fetchedAt = fetchedAt
+        self.top = top
+        self.bill = bill
+        self.serviceStatus = serviceStatus
+        self.monthlyUsage = monthlyUsage
+        self.dailyUsage = dailyUsage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fetchedAt
+        case top
+        case bill
+        case serviceStatus
+        case monthlyUsage
+        case dailyUsage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fetchedAt = try container.decode(Date.self, forKey: .fetchedAt)
+        top = try container.decode(MemberTopResponse.self, forKey: .top)
+        bill = try container.decode(BillSummaryResponse.self, forKey: .bill)
+        serviceStatus = try container.decode(ServiceStatusResponse.self, forKey: .serviceStatus)
+        monthlyUsage = try container.decodeIfPresent([MonthlyUsageService].self, forKey: .monthlyUsage) ?? []
+        dailyUsage = try container.decodeIfPresent([DailyUsageService].self, forKey: .dailyUsage) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fetchedAt, forKey: .fetchedAt)
+        try container.encode(top, forKey: .top)
+        try container.encode(bill, forKey: .bill)
+        try container.encode(serviceStatus, forKey: .serviceStatus)
+        try container.encode(monthlyUsage, forKey: .monthlyUsage)
+        try container.encode(dailyUsage, forKey: .dailyUsage)
+    }
 }
 
 extension MemberTopResponse.ServiceInfo {

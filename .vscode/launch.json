@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:IIJWidget}/Tools/IIJFetcher",
+            "name": "Debug IIJFetcher (Tools/IIJFetcher)",
+            "target": "IIJFetcher",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug IIJFetcher (Tools/IIJFetcher)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:IIJWidget}/Tools/IIJFetcher",
+            "name": "Release IIJFetcher (Tools/IIJFetcher)",
+            "target": "IIJFetcher",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release IIJFetcher (Tools/IIJFetcher)"
+        }
+    ]
+}
