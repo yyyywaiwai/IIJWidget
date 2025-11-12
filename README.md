@@ -3,54 +3,59 @@
 IIJWidget は IIJmio 会員サイトの非公開 API を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報は端末のキーチェーンと App Group コンテナに保存され、アプリとウィジェットの双方で安全に共有されます。
 
 ## 特徴
-- **SwiftUI アプリ (`IIJWidget/`)**: mioID とパスワードを保存し、残量カード・請求一覧・回線状態に加えて、会員サイト準拠の月別/日別データ利用量テーブルも 1 画面で確認できます。
-- **ウィジェット拡張 (`RemainingDataWidget/`)**: アクセサリ/システムサイズごとのレイアウトを備え、30 分ごとに `WidgetDataStore` から最新スナップショットを読み込みます。iOS 17 では App Intents を使った手動リフレッシュにも対応。
-- **共有レイヤー (`Shared/`)**: `IIJAPIClient`、`CredentialStore`、`WidgetRefreshService` などをまとめ、App Group と Keychain を通じてデータを再利用します。
-- **CLI ツール (`Tools/IIJFetcher`)**: API エンドポイントの動作確認やデバッグに使える SwiftPM ベースのフェッチャーを同梱。`--mode usage` で月別、`--mode daily` で直近 30 日分の日別利用量を JSON 取得できます。
-- **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要 API とレスポンス項目を整理し、実装とスクリプトを同期しやすくしています。
+- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。初回起動時はオンボーディングが注意事項と資格情報登録を案内し、右上の「最新取得」ボタンから `WidgetRefreshService` による一括更新をいつでも実行できます。
+- **ウィジェット拡張 (`RemainingDataWidget/`)**: ロック画面アクセサリ (Inline/Circular/Rectangular) とシステム Small/Medium を備え、App Intents (`RefreshWidgetIntent`) を使った手動リフレッシュと 30 分ごとの自動更新を両立。`WidgetDataStore` のスナップショット共有でオフライン時も最新値を表示します。
+- **共有レイヤー (`Shared/`)**: `IIJAPIClient`、`DataUsageParser`、`WidgetRefreshService`、`CredentialStore`、`WidgetDataStore` を App Group 経由で共有し、アプリ・ウィジェット・CLI が同じ `AggregatePayload` とセッションを扱えるようにしています。
+- **CLI ツール (`Tools/IIJFetcher`)**: SwiftPM 製の `IIJFetcher` が `--mode top|bill|status|usage|daily|all` をサポート。`--mode all` は `{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}` 形式でまとめて取得でき、環境変数 (`IIJ_MIO_ID` / `IIJ_PASSWORD`) でも資格情報を渡せます。
+- **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要エンドポイントとレスポンス項目を整理。API のパラメータやペイロードを更新したら README / docs / CLI を必ず同期します。
 
 ## ディレクトリ構成
 ```text
-IIJWidget/           # メインアプリ (SwiftUI ビュー、ViewModel、Assets)
-RemainingDataWidget/ # WidgetKit エクステンションと intents 定義
-Shared/              # API クライアント、資格情報ストア、モデル共通コード
-Tools/IIJFetcher/    # Swift Package ベースの fetch CLI
+IIJWidget/           # メインアプリ (タブ UI、ViewModel、オンボーディング、Assets、entitlements)
+RemainingDataWidget/ # WidgetKit エクステンションと App Intents / タイムライン定義
+Shared/              # API クライアント、CredentialStore、WidgetRefreshService、DataUsageParser などの共有コード
+Tools/IIJFetcher/    # SwiftPM ベースの fetch CLI と HTML パーサ
 IIJWidget.xcodeproj  # アプリ/ウィジェット各ターゲットを束ねる Xcode プロジェクト
-docs/                # エンドポイント定義などの補助資料
+docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 ```
 
 ## 動作要件
-- macOS 14 以降 / Xcode 15 以降
-- iOS 17 以降の実機またはシミュレータ（アクセサリウィジェット対応のため）
+- macOS 14.5 以降 / Xcode 16 以降（Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
+- iOS 17 以降の実機またはシミュレータ。CI でのシミュレータ検証は iPhone 16e (iOS 26.0) のデスティネーションを使用してください。
 - IIJmio の mioID（または登録メールアドレス）とパスワード
-- 任意の App Group と Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身のものに置き換えてください）
+- App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
 
 ## セットアップ手順
-1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git`。
-2. Xcode で `IIJWidget.xcodeproj` を開き、`Signing & Capabilities` で App Group / Keychain Sharing を有効化。`Shared/AppGroup.swift` の `group.jp.yyyywaiwai.iijwidget` を自身の App Group ID に更新します。
-3. アプリをビルドして起動し、トップ画面のフォームから mioID / パスワードを入力。資格情報は `CredentialStore` 経由でキーチェーンに保存され、ウィジェット・CLI からも参照可能になります。
-4. ウィジェットを追加する場合は、端末の Home 画面で「IIJWidget」を検索し、好みのサイズを追加してください。Widget は 30 分おきに自動更新し、iOS 17 以降ではウィジェット内の更新ボタンでもリフレッシュできます。
+1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git && cd IIJWidget`。
+2. Xcode で `IIJWidget.xcodeproj` を開き、`Signing & Capabilities` で App Group / Keychain Sharing を有効化。`Shared/AppGroup.swift` の `group.jp.yyyywaiwai.iijwidget` を自身の App Group ID に更新し、両ターゲットの entitlements と一致させます。
+3. アプリをビルドして起動するとオンボーディングが表示されるので、注意事項に同意後、資格情報を入力して保存します。保存後は設定タブまたは画面右上の「最新取得」で `WidgetRefreshService` による残量/請求/回線状態/利用量の一括取得を実行できます。
+4. ウィジェットを追加する場合は、端末の Home/Lock 画面で「IIJWidget」を選び、アクセサリ／Small／Medium の好きなサイズを追加してください。ウィジェットは 30 分おきに `WidgetDataStore` から更新し、`RefreshWidgetIntent` ボタンで手動リフレッシュが可能です。
 5. CLI で API を確認する場合:
    ```bash
    cd Tools/IIJFetcher
    # すべてのデータをまとめて取得
    swift run IIJFetcher --mode all --mio-id <ID> --password <PW>
 
-   # 日別データ利用量だけを確認
-   swift run IIJFetcher --mode daily --mio-id <ID> --password <PW>
+   # 個別 API
+   swift run IIJFetcher --mode top      # /api/member/top
+   swift run IIJFetcher --mode bill     # /api/member/getBillSummary
+   swift run IIJFetcher --mode status   # /api/member/getServiceStatus
+   swift run IIJFetcher --mode usage    # /service/setup/hdc/viewmonthlydata/
+   swift run IIJFetcher --mode daily    # /service/setup/hdc/viewdailydata/
    ```
-   もしくは `IIJ_MIO_ID` / `IIJ_PASSWORD` を環境変数で渡せます。
+   `IIJ_MIO_ID` / `IIJ_PASSWORD` 環境変数でも資格情報を渡せ、`--mode all` は `fetchedAt/top/bill/serviceStatus/monthlyUsage/dailyUsage` を 1 つの JSON に含めます。
 
 ## ビルド & テスト
-- アプリ/ウィジェットのビルド: `xcodebuild -scheme IIJWidget -configuration Release`
+- リリースビルド (CI 想定): `xcodebuild -scheme IIJWidget -configuration Release`
+- シミュレータ検証: `xcodebuild -scheme IIJWidget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build`
 - CLI のテスト (SwiftPM): `cd Tools/IIJFetcher && swift test`
-- Xcode から `IIJWidget` または `RemainingDataWidget` スキームを選択してシミュレータで動作確認するのが最も簡単です。
+- 実機/シミュレータ動作確認: Xcode で `IIJWidget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
 
 ## 開発メモ
-- API 仕様の詳細は `docs/iij_endpoints.md` を参照してください。エンドポイントやレスポンス構造を更新した場合はドキュメントも合わせて更新します。
-- `Shared/CredentialStore.swift` は Keychain のアクセルグループを自動移行するため、既存ユーザーでもウィジェットへシームレスに移行できます。
-- `WidgetRefreshService` は App Group の共有ディレクトリに JSON スナップショットを保存し、ウィジェットがオフラインでも最後の成功値を表示できるようにしています。
-- `Shared/DataUsageParser.swift` は `viewmonthlydata` / `viewdailydata` HTML を共通モデルにパースするための処理をまとめています。会員サイトのテーブル構造が変わった場合はここを更新してください。
+- API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。
+- `Shared/CredentialStore.swift` は App Group 付きの Keychain へ資格情報を退避し、既存ユーザーの移行や CLI/Widget からの再利用を自動化しています。
+- `WidgetRefreshService` と `WidgetSnapshot+Payload.swift` で `AggregatePayload` を `WidgetDataStore` のスナップショットへ変換し、`RefreshWidgetIntent` 実行時は `isRefreshing` フラグを同期します。ウィジェット更新ロジックを変更する場合は併せて見直してください。
+- `Shared/DataUsageParser.swift` は `viewmonthlydata` / `viewdailydata` HTML から共通モデルを生成します。会員サイトのフォームやテーブル構造が変わった場合はここを更新してください。
 
 ## セキュリティ上の注意
 - 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。

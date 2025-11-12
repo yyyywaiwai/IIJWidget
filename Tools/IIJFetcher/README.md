@@ -1,15 +1,17 @@
 # IIJFetcher CLI
 
-IIJFetcher は IIJmio 会員サイトの非公開 API を直接叩き、通信量・請求情報を JSON で取得するための検証用 CLI です。ログイン後に以下の API を呼び出せます。
+IIJFetcher は IIJmio 会員サイトの非公開 API を直接叩き、通信量・請求情報・回線状態・月別/日別利用量を JSON で取得するための検証用 CLI です。ログイン後に以下のモードを選べます。
 
-- `--mode top` : `/api/member/top`（データ残量やクーポン情報）
+- `--mode top` : `/api/member/top`（残量カードやクーポン情報）
 - `--mode bill` : `/api/member/getBillSummary`（最大 7 ヶ月分の請求サマリ）
 - `--mode status` : `/api/member/getServiceStatus`（各回線の稼働状態）
-- `--mode all` : 上記 3 つをまとめて取得
+- `--mode usage` : `/service/setup/hdc/viewmonthlydata/`（回線別の月別データ利用量テーブル）
+- `--mode daily` : `/service/setup/hdc/viewdailydata/`（直近 30 日の利用量と日別サマリ）
+- `--mode all` : 上記すべてを 1 つの `AggregatePayload`（`{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}`）にまとめて出力
 
 ## 前提
 
-- Swift 5.9 以降 (Xcode 15 以降)
+- Swift 6.2 以降 (Xcode 16 以降) — `Package.swift` の `swift-tools-version` に合わせてください
 - インターネット接続
 - IIJmio の mioID もしくは登録メールアドレスとパスワード
 
@@ -29,6 +31,8 @@ cd Tools/IIJFetcher
 swift run IIJFetcher --mode top
 swift run IIJFetcher --mode bill
 swift run IIJFetcher --mode status
+swift run IIJFetcher --mode usage
+swift run IIJFetcher --mode daily
 swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
 ```
 
@@ -83,7 +87,34 @@ swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
 }
 ```
 
-`--mode all` では上記 3 つを `{"fetchedAt": ..., "top": ..., "bill": ..., "serviceStatus": ...}` という 1 つの JSON にまとめます。
+`--mode usage` は HTML テーブルをパースして以下のような JSON を返します。
+
+```json
+[
+  {
+    "hdoCode": "hdc00000000",
+    "planName": "ギガプラン",
+    "entries": [
+      { "month": "202509", "inGB": 8.4, "outGB": 7.9 }
+    ]
+  }
+]
+```
+
+`--mode daily` は直近 30 日のサマリを次のような JSON で返します。
+
+```json
+[
+  {
+    "hdoCode": "hdc00000000",
+    "entries": [
+      { "date": "2025-09-08", "usedGB": 0.42 }
+    ]
+  }
+]
+```
+
+`--mode all` では `{"fetchedAt": ..., "top": ..., "bill": ..., "serviceStatus": ..., "monthlyUsage": [...], "dailyUsage": [...]}` という 1 つの JSON にまとまり、Swift アプリの `AggregatePayload` と互換です。
 
 失敗した場合は API 側のエラーコード（例: `ERROR_CODE_008`）もしくは HTTP ステータスを表示して終了します。
 
@@ -91,5 +122,6 @@ swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
 
 - ログインは `/api/member/login` に JSON で `mioId` / `password` を POST し、HttpOnly Cookie を取得します。
 - `URLSessionConfiguration.ephemeral`＋専用 Cookie ストアを使っているため、ブラウザセッションとは独立しています。
-- API 呼び出し時はエラーフィールド（`{"error":"ERROR_CODE_xxx"}`）を共通で検出しています。
+- `usage`/`daily` モードは `viewmonthlydata` / `viewdailydata` のフォームをクロールし、`DataUsageHTMLParser` でテーブルを `MonthlyUsageService` / `DailyUsageService` モデルへ変換します。
+- `--mode all` の出力はアプリ/ウィジェットと同じ `AggregatePayload` をそのまま JSON 化したものです。
 - 詳細な API 一覧は `docs/iij_endpoints.md` を参照してください。
