@@ -11,6 +11,6 @@ extension WidgetSnapshot {
             totalCapacityGB: total,
             remainingGB: remaining
         )
-        self.init(fetchedAt: payload.fetchedAt, primaryService: snapshot)
+        self.init(fetchedAt: payload.fetchedAt, primaryService: snapshot, isRefreshing: false)
     }
 }

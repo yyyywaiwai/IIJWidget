@@ -10,6 +10,7 @@ struct RemainingDataEntry: TimelineEntry {
 struct RemainingDataProvider: AppIntentTimelineProvider {
     typealias Intent = RemainingDataConfigurationIntent
     private let store = WidgetDataStore()
+    private let refreshService = WidgetRefreshService()
 
     func placeholder(in context: Context) -> RemainingDataEntry {
         RemainingDataEntry(date: Date(), snapshot: .placeholder)
@@ -24,11 +25,39 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: RemainingDataConfigurationIntent, in context: Context) async -> Timeline<RemainingDataEntry> {
-        let snapshot = store.loadSnapshot()
+        if context.isPreview {
+            let previewEntry = RemainingDataEntry(date: Date(), snapshot: .placeholder)
+            return Timeline(entries: [previewEntry], policy: .after(Date().addingTimeInterval(1800)))
+        }
+
+        let snapshot = await loadSnapshotForTimeline()
         let entryDate = snapshot?.fetchedAt ?? Date()
         let entry = RemainingDataEntry(date: entryDate, snapshot: snapshot)
         let refresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
         return Timeline(entries: [entry], policy: .after(refresh))
+    }
+
+    private func loadSnapshotForTimeline() async -> WidgetSnapshot? {
+        if let cached = store.loadSnapshot(), cached.isRefreshing {
+            return cached
+        }
+
+        do {
+            let outcome = try await refreshService.refresh(
+                manualCredentials: nil,
+                persistManualCredentials: false,
+                allowSessionReuse: true,
+                allowKeychainFallback: true
+            )
+            if let snapshot = WidgetSnapshot(payload: outcome.payload) {
+                return snapshot
+            }
+        } catch WidgetRefreshError.missingCredentials {
+            // 資格情報未設定時は保存済みスナップショットを返す
+        } catch {
+            print("[RemainingDataProvider] refresh failed: \(error.localizedDescription)")
+        }
+        return store.loadSnapshot()
     }
 }
 
@@ -45,11 +74,17 @@ struct RemainingDataWidgetEntryView: View {
     private var widgetContent: some View {
         switch family {
         case .accessoryCircular:
-            circularView
+            lockScreenRefreshWrapper {
+                circularView
+            }
         case .accessoryInline:
-            inlineView
+            lockScreenRefreshWrapper {
+                inlineView
+            }
         case .accessoryRectangular:
-            rectangularView
+            lockScreenRefreshWrapper {
+                rectangularView
+            }
         case .systemSmall:
             smallView
         default:
@@ -57,9 +92,28 @@ struct RemainingDataWidgetEntryView: View {
         }
     }
 
+    @ViewBuilder
+    private func lockScreenRefreshWrapper<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            Button(intent: RefreshWidgetIntent()) {
+                RefreshPulseContainer(isRefreshing: isRefreshing, content: content)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+        } else {
+            content()
+        }
+    }
+
+    private var isRefreshing: Bool {
+        entry.snapshot?.isRefreshing == true
+    }
+
     private var circularView: some View {
         Group {
-            if let service = entry.snapshot?.primaryService {
+            if isRefreshing {
+                refreshingCircular
+            } else if let service = entry.snapshot?.primaryService {
                 Gauge(value: service.remainingGB, in: 0...service.totalCapacityGB) {
                     Text("残")
                 } currentValueLabel: {
@@ -73,8 +127,19 @@ struct RemainingDataWidgetEntryView: View {
         }
     }
 
+    private var refreshingCircular: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(.primary.opacity(0.2), lineWidth: 4)
+            Text("更新中")
+                .font(.caption2.weight(.semibold))
+        }
+    }
+
     private var inlineView: some View {
-        if let service = entry.snapshot?.primaryService {
+        if isRefreshing {
+            Text("更新中")
+        } else if let service = entry.snapshot?.primaryService {
             Text("残\(shortGB(service.remainingGB)) / \(shortGB(service.totalCapacityGB))")
         } else {
             Text("データ未取得")
@@ -84,7 +149,7 @@ struct RemainingDataWidgetEntryView: View {
     private var rectangularView: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let service = entry.snapshot?.primaryService {
-                Text(service.serviceName)
+                Text(isRefreshing ? "更新中..." : service.serviceName)
                     .font(.caption)
                     .fontWeight(.semibold)
                 FilledLinearMeter(
@@ -104,11 +169,18 @@ struct RemainingDataWidgetEntryView: View {
     private var smallView: some View {
         cardBackground(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Spacer()
+                HStack(spacing: 6) {
+                    Spacer(minLength: 0)
+                    if isRefreshing {
+                        refreshStatusLabel
+                    }
                     refreshButton
                 }
-                if let service = entry.snapshot?.primaryService {
+                if isRefreshing {
+                    Text("更新中...")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
+                } else if let service = entry.snapshot?.primaryService {
                     HStack {
                         Spacer(minLength: 0)
                         circularMeter(for: service, size: 96)
@@ -128,11 +200,14 @@ struct RemainingDataWidgetEntryView: View {
         cardBackground(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(entry.snapshot?.primaryService?.serviceName ?? "IIJmio")
+                    Text(isRefreshing ? "更新中..." : (entry.snapshot?.primaryService?.serviceName ?? "IIJmio"))
                         .font(.title3.bold())
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Spacer()
+                    if isRefreshing {
+                        refreshStatusLabel
+                    }
                     refreshButton
                 }
                 HStack(alignment: .center, spacing: 12) {
@@ -175,27 +250,44 @@ struct RemainingDataWidgetEntryView: View {
                 )
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 2) {
-                Text(shortGB(service.remainingGB))
-                    .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
-                Text("残")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if isRefreshing {
+                    Text("更新中...")
+                        .font(.system(size: size * 0.2, weight: .bold, design: .rounded))
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                } else {
+                    Text(shortGB(service.remainingGB))
+                        .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
+                    Text("残")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(width: size, height: size)
+    }
+
+    private var refreshStatusLabel: some View {
+        Text("更新中...")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+            )
     }
 
     @ViewBuilder
     private var refreshButton: some View {
         if #available(iOSApplicationExtension 17.0, *) {
             Button(intent: RefreshWidgetIntent()) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
+                RefreshSymbol(isRefreshing: isRefreshing)
             }
             .buttonStyle(.borderless)
         } else {
-            Image(systemName: "arrow.clockwise")
-                .font(.caption)
+            LegacyRefreshSymbol()
                 .foregroundStyle(.secondary)
         }
     }
@@ -261,6 +353,61 @@ private struct FilledLinearMeter: View {
         }
         .compositingGroup()
         .clipped()
+    }
+}
+
+@available(iOSApplicationExtension 17.0, *)
+private struct RefreshSymbol: View {
+    let isRefreshing: Bool
+
+    var body: some View {
+        if isRefreshing {
+            glyph
+                .symbolEffect(
+                    .pulse,
+                    options: .repeat(Int.max),
+                    value: isRefreshing
+                )
+        } else {
+            glyph
+        }
+    }
+
+    private var glyph: some View {
+        Image(systemName: "arrow.clockwise")
+            .font(.caption)
+    }
+}
+
+@available(iOSApplicationExtension 17.0, *)
+private struct RefreshPulseContainer<Content: View>: View {
+    let isRefreshing: Bool
+    let content: () -> Content
+
+    var body: some View {
+        if isRefreshing {
+            TimelineView(.periodic(from: .now, by: 0.9)) { context in
+                content()
+                    .opacity(opacity(for: context.date))
+            }
+        } else {
+            content()
+        }
+    }
+
+    private func opacity(for date: Date) -> Double {
+        let cycle: Double = 0.9
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+        // triangle wave between 0.5 and 1.0
+        let triangle = phase <= 0.5 ? phase * 2 : (1 - phase) * 2
+        return 0.5 + (triangle * 0.5)
+    }
+}
+
+private struct LegacyRefreshSymbol: View {
+    var body: some View {
+        Image(systemName: "arrow.clockwise")
+            .font(.caption)
     }
 }
 
