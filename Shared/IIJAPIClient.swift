@@ -29,6 +29,7 @@ struct APIErrorEnvelope: Decodable {
 
 final class IIJAPIClient {
     private let session: URLSession
+    private let cookieStorage: HTTPCookieStorage
     private let decoder = JSONDecoder()
     private var hasValidSession = false
     private var activeCredentials: Credentials?
@@ -39,6 +40,7 @@ final class IIJAPIClient {
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
         let storage = HTTPCookieStorage.sharedCookieStorage(forGroupContainerIdentifier: AppGroup.identifier)
+        cookieStorage = storage
         config.httpCookieStorage = storage
         config.sharedContainerIdentifier = AppGroup.identifier
         config.httpAdditionalHeaders = [
@@ -269,6 +271,14 @@ final class IIJAPIClient {
 
     private func invalidateSession() {
         hasValidSession = false
+    }
+
+    func clearPersistedSession() {
+        hasValidSession = false
+        activeCredentials = nil
+        cookieStorage.cookies?.forEach { cookie in
+            cookieStorage.deleteCookie(cookie)
+        }
     }
 
     private func buildAggregatePayload() async throws -> AggregatePayload {

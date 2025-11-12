@@ -13,7 +13,9 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var viewModel = AppViewModel()
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedSection: AppSection = .home
+    @State private var isOnboardingPresented = false
     @FocusState private var focusedField: Field?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -68,9 +70,11 @@ struct ContentView: View {
 
                 SettingsTab(
                     viewModel: viewModel,
-                    loginStatusText: viewModel.loginStatusText,
-                    focusedField: $focusedField
-                )
+                    focusedField: $focusedField,
+                    hasCompletedOnboarding: $hasCompletedOnboarding
+                ) {
+                    isOnboardingPresented = true
+                }
                 .tabItem { Label(AppSection.settings.title, systemImage: AppSection.settings.iconName) }
                 .tag(AppSection.settings)
             }
@@ -103,12 +107,25 @@ struct ContentView: View {
             .navigationTitle(selectedSection.title)
             .navigationBarTitleDisplayMode(.inline)
         }
+        .fullScreenCover(isPresented: $isOnboardingPresented) {
+            OnboardingFlowView(viewModel: viewModel) {
+                hasCompletedOnboarding = true
+                isOnboardingPresented = false
+            }
+            .interactiveDismissDisabled(true)
+        }
+        .onAppear {
+            evaluateOnboardingPresentation()
+        }
         .task {
             await viewModel.triggerAutomaticRefreshIfNeeded()
         }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             Task { await viewModel.triggerAutomaticRefreshIfNeeded() }
+        }
+        .onChange(of: viewModel.hasStoredCredentials) { _ in
+            evaluateOnboardingPresentation()
         }
     }
 
@@ -124,6 +141,12 @@ struct ContentView: View {
             return true
         }
         return false
+    }
+
+    private func evaluateOnboardingPresentation() {
+        if !hasCompletedOnboarding && !viewModel.hasStoredCredentials {
+            isOnboardingPresented = true
+        }
     }
 }
 
@@ -237,24 +260,16 @@ struct BillingTabView: View {
 
 struct SettingsTab: View {
     @ObservedObject var viewModel: AppViewModel
-    let loginStatusText: String?
     let focusedField: FocusState<ContentView.Field?>.Binding
+    @Binding var hasCompletedOnboarding: Bool
+    let presentOnboarding: () -> Void
+    @State private var showLogoutConfirmation = false
+    @State private var logoutErrorMessage: String?
 
     var body: some View {
         Form {
             Section(header: Text("資格情報")) {
                 CredentialsCard(viewModel: viewModel, focusedField: focusedField)
-            }
-
-            Section(header: Text("自動ログイン種別")) {
-                if let status = loginStatusText {
-                    Text(status)
-                        .font(.subheadline)
-                } else {
-                    Text("まだログインしていません")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section(header: Text("データ取得")) {
@@ -272,9 +287,60 @@ struct SettingsTab: View {
                     Label("GitHub リポジトリを開く", systemImage: "arrow.up.right.square")
                 }
             }
+
+            Section {
+                Button(role: .destructive) {
+                    showLogoutConfirmation = true
+                } label: {
+                    Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
+                        .frame(maxWidth: .infinity)
+                }
+            } footer: {
+                Text("ログアウトするとキーチェーンの資格情報が削除され、次回起動時に再設定が必要です。")
+                    .font(.footnote)
+            }
         }
         .scrollContentBackground(.hidden)
         .background(Color(.systemGroupedBackground))
+        .alert(
+            "保存済みの資格情報を削除してログアウトしますか?",
+            isPresented: $showLogoutConfirmation
+        ) {
+            Button("ログアウト", role: .destructive) {
+                performLogout()
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        .alert(
+            "ログアウトに失敗しました",
+            isPresented: Binding(
+                get: { logoutErrorMessage != nil },
+                set: { newValue in
+                    if !newValue {
+                        logoutErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                logoutErrorMessage = nil
+            }
+        } message: {
+            if let logoutErrorMessage {
+                Text(logoutErrorMessage)
+            }
+        }
+    }
+
+    private func performLogout() {
+        focusedField.wrappedValue = nil
+        do {
+            try viewModel.logout()
+            hasCompletedOnboarding = false
+            presentOnboarding()
+        } catch {
+            logoutErrorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -320,6 +386,211 @@ struct CredentialsCard: View {
             Text("入力した資格情報は端末のキーチェーンに暗号化して保存され、次回起動時に自動で入力されます。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct OnboardingFlowView: View {
+    enum Step {
+        case disclaimer
+        case credentials
+    }
+
+    @ObservedObject var viewModel: AppViewModel
+    let onFinish: () -> Void
+
+    @State private var step: Step = .disclaimer
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch step {
+                case .disclaimer:
+                    OnboardingDisclaimerStep {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            step = .credentials
+                        }
+                    }
+                case .credentials:
+                    OnboardingCredentialSetupStep(viewModel: viewModel) {
+                        onFinish()
+                    }
+                }
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if step == .credentials {
+                        Button("戻る") {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                step = .disclaimer
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(step == .disclaimer ? "ご利用前のお願い" : "ログイン設定")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+struct OnboardingDisclaimerStep: View {
+    let onAgree: () -> Void
+
+    private struct Highlight: Identifiable {
+        let id = UUID()
+        let icon: String
+        let iconColor: Color
+        let title: String
+        let detail: String
+    }
+
+    private var highlights: [Highlight] {
+        [
+            Highlight(
+                icon: "exclamationmark.triangle.fill",
+                iconColor: .pink,
+                title: "非公式アプリ",
+                detail: "IIJWidgetは個人プロジェクトであり、公式サポートや補償の対象ではありません。"
+            ),
+            Highlight(
+                icon: "lock.shield.fill",
+                iconColor: .blue,
+                title: "資格情報の扱い",
+                detail: "入力内容は端末キーチェーンにのみ暗号化保存され、サードパーティのサーバーへ送信しません。"
+            ),
+            Highlight(
+                icon: "hand.raised.fill",
+                iconColor: .orange,
+                title: "自己責任での利用",
+                detail: "アカウント停止などのリスクを理解した上で、自己責任でご利用ください。"
+            )
+        ]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 32) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("ご利用前の確認")
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    Text("IIJWidgetを使う前に、以下のポイントをご確認ください。")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(spacing: 16) {
+                    ForEach(highlights) { highlight in
+                        HStack(alignment: .top, spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(highlight.iconColor.opacity(0.12))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: highlight.icon)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(highlight.iconColor)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(highlight.title)
+                                    .font(.headline)
+                                Text(highlight.detail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(.secondarySystemBackground))
+                        )
+                    }
+                }
+
+                Text("上記に同意できない場合はアプリを終了してください。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    onAgree()
+                } label: {
+                    Text("同意して続行")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 36)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+}
+
+struct OnboardingCredentialSetupStep: View {
+    @ObservedObject var viewModel: AppViewModel
+    let onFinish: () -> Void
+
+    @FocusState private var field: Field?
+
+    private enum Field: Hashable {
+        case mioId
+        case password
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ログイン情報を設定")
+                        .font(.title.bold())
+                    Text("IIJmioアカウントの資格情報を入力してください。保存後は設定タブまたは右上の更新ボタンから残量取得を実行できます。")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 16) {
+                    TextField("mioID / メールアドレス", text: $viewModel.mioId)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder)
+                        .focused($field, equals: .mioId)
+
+                    SecureField("パスワード", text: $viewModel.password)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($field, equals: .password)
+
+                    Text("入力内容は端末キーチェーンに暗号化して保存され、ウィジェット更新時にのみ使用されます。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                VStack(spacing: 12) {
+                    Button {
+                        field = nil
+                        viewModel.refreshManually()
+                        onFinish()
+                    } label: {
+                        Label("今すぐログインして残量取得", systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.canSubmit)
+                }
+
+                Text("ログアウトすると再度この画面は表示されませんが、設定タブからいつでも資格情報を更新できます。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
         }
     }
 }

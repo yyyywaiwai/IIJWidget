@@ -11,6 +11,7 @@
 - `xcodebuild -scheme IIJWidget -configuration Release`: builds the full app/widget targets; use for CI to verify compilation.
 - `swift test` (from `Tools/IIJFetcher` if expanding the package): runs SwiftPM tests for the fetcher package; expect `Package.swift` to define targets before execution.
 - Launch from Xcode (select scheme `IIJWidget` or `RemainingDataWidget`); the simulator run verifies entitlements and widget timelines in practice.
+- Simulatorでのビルド検証は必ず `xcodebuild -scheme IIJWidget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build` のようにiPhone 16e (OS 26.0) を指定して実施すること。
 
 ## Coding Style & Naming Conventions
 - Swift files use 4-space indentation with the Swift API Design Guidelines: clarity over terseness, label all parameters that improve readability, and avoid force unwraps unless justified.

@@ -70,4 +70,8 @@ struct WidgetRefreshService {
         }
         return RefreshOutcome(payload: payload, loginSource: source)
     }
+
+    func clearSessionArtifacts() {
+        apiClient.clearPersistedSession()
+    }
 }

@@ -22,6 +22,7 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var state: LoadState = .idle
     @Published private(set) var credentialFieldsHidden = false
     @Published private(set) var lastLoginSource: WidgetRefreshService.LoginSource?
+    @Published private(set) var hasStoredCredentials = false
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
@@ -33,6 +34,8 @@ final class AppViewModel: ObservableObject {
         if let saved = try? credentialStore.load() {
             mioId = saved.mioId
             password = saved.password
+            credentialFieldsHidden = true
+            hasStoredCredentials = true
         }
     }
 
@@ -67,6 +70,17 @@ final class AppViewModel: ObservableObject {
 
     func revealCredentialFields() {
         credentialFieldsHidden = false
+    }
+
+    func logout() throws {
+        try credentialStore.delete()
+        mioId = ""
+        password = ""
+        credentialFieldsHidden = false
+        lastLoginSource = nil
+        hasStoredCredentials = false
+        state = .idle
+        widgetRefreshService.clearSessionArtifacts()
     }
 
     private func refresh(trigger: RefreshTrigger) async {
@@ -110,5 +124,6 @@ final class AppViewModel: ObservableObject {
         case .manual:
             credentialFieldsHidden = false
         }
+        hasStoredCredentials = (try? credentialStore.load()) != nil
     }
 }
