@@ -13,6 +13,7 @@ Chrome DevTools で取得した Nuxt バンドル（`/_nuxt/*.js`）と実際の
 | `/api/member/getBillSummary` | GET | なし | `billList[*].month`, `totalAmount`, `isUnpaid`, `isVoiceSim`, `isImt` | 料金・お支払いタブで表示される直近 7 ヶ月分の請求サマリ。 | `index.9w7tsc_m.js` |
 | `/api/front/getChatBotPopupToken` | GET | なし | `{ "token": "…", "popupSrc": "…" }` | 画面右下のカラクリチャット呼び出し用トークン。ウィジェットでは不要。 | `chatbot.RO5WKR_d.js` |
 | `/service/setup/hdc/viewmonthlydata/` | HTML (POST で CSRF 更新) | `hdoCode`, `_csrf` を含む form POST | `<table>` 形式で月別の高速/低速利用量 | 純粋な HTML 画面。API エンドポイントは存在せず、スクレイピングかヘッドレスブラウザでの取得が必要。 | 画面本体 |
+| `/service/setup/hdc/viewdailydata/` | HTML (GET + POST) | GET: 画面ロード。POST: `hdoCode`, `_csrf` | GET の `<div class="viewdata">` は直近 4 日分、POST の `<table>` は過去 30 日分 | 4 日プレビューに当日分が含まれる一方、POST 側は更新遅延で当日が欠落するケースがあるため、GET プレビューで得た行を `hdoCode` ごとにマージして利用する。 | 画面本体 / `DataUsageHTMLParser.previewDailyServices` |
 
 > **注記**
 > - 各 API は `https://www.iijmio.jp` 配下で提供され、セッションは Cookie ベース (JSESSIONID 等) です。
