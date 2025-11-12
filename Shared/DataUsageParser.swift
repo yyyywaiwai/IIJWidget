@@ -97,6 +97,25 @@ struct DataUsageHTMLParser {
         return DataUsageLandingPage(forms: forms)
     }
 
+    func extractCSRFToken() -> String? {
+        captureInput(named: "_csrf", in: html)
+    }
+
+    func previewDailyServices(for forms: [DataUsageFormDescriptor]) -> [String: DailyUsageService] {
+        let blocks = viewdataBlocks()
+        guard !blocks.isEmpty else { return [:] }
+        var map: [String: DailyUsageService] = [:]
+
+        for (index, form) in forms.enumerated() {
+            guard index < blocks.count else { break }
+            if let service = parseDailyService(from: blocks[index], hdoCode: form.hdoCode) {
+                map[form.hdoCode] = service
+            }
+        }
+
+        return map
+    }
+
     func parseMonthlyService(hdoCode: String) -> MonthlyUsageService? {
         guard let meta = extractServiceMetadata() else { return nil }
         let entries = parseMonthlyRows(from: meta.tableHTML)
@@ -104,14 +123,23 @@ struct DataUsageHTMLParser {
     }
 
     func parseDailyService(hdoCode: String) -> DailyUsageService? {
-        guard let meta = extractServiceMetadata() else { return nil }
+        guard let block = firstViewdataBlock() else { return nil }
+        return parseDailyService(from: block, hdoCode: hdoCode)
+    }
+
+    private func parseDailyService(from block: String, hdoCode: String) -> DailyUsageService? {
+        guard let meta = extractServiceMetadata(from: block) else { return nil }
         let entries = parseDailyRows(from: meta.tableHTML)
         return DailyUsageService(hdoCode: hdoCode, titlePrimary: meta.title, titleDetail: meta.detail, entries: entries)
     }
 
     private func extractServiceMetadata() -> UsageServiceMetadata? {
         guard let block = firstViewdataBlock() else { return nil }
-        guard let titleHTML = firstMatch(in: block, pattern: #"(?s)<div class=\"viewdata-title\">(.*?)</div>"#) else {
+        return extractServiceMetadata(from: block)
+    }
+
+    private func extractServiceMetadata(from block: String) -> UsageServiceMetadata? {
+        guard let titleHTML = firstMatch(in: block, pattern: #"(?s)<div[^>]*class=\"[^\"]*viewdata-title[^\"]*\"[^>]*>(.*?)</div>"#) else {
             return nil
         }
         let lines = textLines(from: titleHTML)
@@ -126,12 +154,13 @@ struct DataUsageHTMLParser {
     }
 
     private func firstViewdataBlock() -> String? {
+        viewdataBlocks().first
+    }
+
+    private func viewdataBlocks() -> [String] {
         let blockRegex = try! NSRegularExpression(pattern: #"(?s)<div class=\"viewdata\">(.*?)</table>\s*</div>"#)
         let nsString = html as NSString
-        guard let match = blockRegex.firstMatch(in: html, range: NSRange(location: 0, length: nsString.length)) else {
-            return nil
-        }
-        return nsString.substring(with: match.range)
+        return blockRegex.matches(in: html, range: NSRange(location: 0, length: nsString.length)).map { nsString.substring(with: $0.range) }
     }
 
     private func parseMonthlyRows(from tableHTML: String) -> [MonthlyUsageEntry] {
@@ -184,7 +213,7 @@ struct DataUsageHTMLParser {
                 continue
             }
 
-            let cellRegex = try! NSRegularExpression(pattern: #"(?s)<td[^>]*>(.*?)</td>"#)
+            let cellRegex = try! NSRegularExpression(pattern: #"(?s)<t[dh][^>]*>(.*?)</t[dh]>"#)
             let rowNSString = rowHTML as NSString
             let cellMatches = cellRegex.matches(in: rowHTML, range: NSRange(location: 0, length: rowNSString.length))
             guard cellMatches.count >= 3 else { continue }

@@ -259,7 +259,6 @@ struct IIJFetcherCLI {
 final class IIJAPIClient {
     private let session: URLSession
     private let decoder = JSONDecoder()
-
     init() {
         let config = URLSessionConfiguration.ephemeral
         config.waitsForConnectivity = true
@@ -347,30 +346,63 @@ final class IIJAPIClient {
         let landingData = try await request(path: "/service/setup/hdc/viewdailydata/", method: "GET", contentType: nil)
         guard let landingHTML = String(data: landingData, encoding: .utf8) else { return [] }
         let landingParser = DataUsageHTMLParser(html: landingHTML)
-        let forms = landingParser.extractLandingPageForms().forms
+        let landing = landingParser.extractLandingPageForms()
+        let forms = landing.forms
+        let previewServices = landingParser.previewDailyServices(for: forms)
         guard !forms.isEmpty else { return [] }
 
         var services: [DailyUsageService] = []
-        for form in forms {
-            guard let body = formURLEncoded([
-                "hdoCode": form.hdoCode,
-                "_csrf": form.csrfToken
-            ]) else { continue }
 
-            let response = try await request(
-                path: "/service/setup/hdc/viewdailydata/",
-                method: "POST",
-                body: body,
-                contentType: "application/x-www-form-urlencoded"
-            )
-            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
-            let detailParser = DataUsageHTMLParser(html: detailHTML)
-            if let service = detailParser.parseDailyService(hdoCode: form.hdoCode) {
-                services.append(service)
+        for form in forms {
+            guard let detailHTML = try await requestDailyDetailHTML(hdoCode: form.hdoCode, csrfToken: form.csrfToken) else {
+                continue
             }
+
+            let detailParser = DataUsageHTMLParser(html: detailHTML)
+            guard let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode) else {
+                continue
+            }
+
+            let merged = mergeDailyServices(primary: baseService, overlay: previewServices[form.hdoCode])
+            services.append(merged)
         }
 
         return services
+    }
+
+    private func requestDailyDetailHTML(hdoCode: String, csrfToken: String) async throws -> String? {
+        guard let body = formURLEncoded([
+            "hdoCode": hdoCode,
+            "_csrf": csrfToken
+        ]) else { return nil }
+
+        let response = try await request(
+            path: "/service/setup/hdc/viewdailydata/",
+            method: "POST",
+            body: body,
+            contentType: "application/x-www-form-urlencoded"
+        )
+        return String(data: response, encoding: .utf8)
+    }
+
+    private func mergeDailyServices(primary: DailyUsageService, overlay: DailyUsageService?) -> DailyUsageService {
+        guard let overlay else { return primary }
+        var seenLabels = Set(primary.entries.map { $0.id })
+        var mergedEntries = primary.entries
+
+        for entry in overlay.entries.reversed() {
+            if !seenLabels.contains(entry.id) {
+                mergedEntries.insert(entry, at: 0)
+                seenLabels.insert(entry.id)
+            }
+        }
+
+        return DailyUsageService(
+            hdoCode: primary.hdoCode,
+            titlePrimary: primary.titlePrimary,
+            titleDetail: primary.titleDetail,
+            entries: mergedEntries
+        )
     }
 
     private func request(path: String, method: String, body: Data? = nil, contentType: String? = "application/json") async throws -> Data {
