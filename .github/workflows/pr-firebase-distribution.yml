@@ -52,16 +52,13 @@ jobs:
           echo "ARCHIVE_PATH=$RUNNER_TEMP/IIJWidget.xcarchive" >> "$GITHUB_ENV"
           echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
 
-      - name: Select Xcode 26.1
+      - name: Select Xcode 26.0
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.1'
+          xcode-version: '26.0'
 
       - name: Resolve Swift package dependencies
         run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -resolvePackageDependencies
-
-      - name: Install iOS platform support
-        run: sudo xcodebuild -downloadPlatform iOS
 
       - name: Install signing assets
         id: signing
