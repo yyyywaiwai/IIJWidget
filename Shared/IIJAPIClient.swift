@@ -74,6 +74,20 @@ final class IIJAPIClient {
         }
     }
 
+    func fetchBillDetail(entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
+        let html = try await requestBillDetailHTML(for: entry)
+        guard let detail = BillDetailHTMLParser(html: html).parse() else {
+            throw IIJAPIClientError.invalidResponse
+        }
+        return detail
+    }
+
+    func fetchBillDetail(entry: BillSummaryResponse.BillEntry, credentials: Credentials) async throws -> BillDetailResponse {
+        try await performWithAutoLogin(credentials: credentials) {
+            try await fetchBillDetail(entry: entry)
+        }
+    }
+
     private func login(credentials: Credentials) async throws {
         let payload: [String: String] = [
             "mioId": credentials.mioId,
@@ -241,6 +255,40 @@ final class IIJAPIClient {
             throw IIJAPIClientError.httpError(httpResponse.statusCode)
         }
         return data
+    }
+
+    private func requestBillDetailHTML(for entry: BillSummaryResponse.BillEntry) async throws -> String {
+        guard let billNos = entry.billNoList, !billNos.isEmpty else {
+            throw IIJAPIClientError.invalidResponse
+        }
+        guard let body = formURLEncodedArray(name: "billNoList", values: billNos) else {
+            throw IIJAPIClientError.invalidResponse
+        }
+        let data = try await request(
+            path: "/customer/bill/detail/",
+            method: "POST",
+            body: body,
+            contentType: "application/x-www-form-urlencoded"
+        )
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw IIJAPIClientError.invalidResponse
+        }
+        if html.contains("システムエラー") {
+            throw NSError(domain: "IIJAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "請求明細の取得中にエラーが発生しました"])
+        }
+        return html
+    }
+
+    private func formURLEncodedArray(name: String, values: [String]) -> Data? {
+        guard !values.isEmpty else { return nil }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._* ")
+        var segments: [String] = []
+        for value in values {
+            guard var encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+            encoded = encoded.replacingOccurrences(of: " ", with: "+")
+            segments.append("\(name)=\(encoded)")
+        }
+        return segments.joined(separator: "&").data(using: .utf8)
     }
 
     private func performWithAutoLogin<T>(credentials: Credentials, operation: () async throws -> T) async throws -> T {

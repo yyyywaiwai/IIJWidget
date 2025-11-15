@@ -335,7 +335,7 @@ private enum DataUsageValueParser {
     }
 }
 
-private extension String {
+extension String {
     var trimmedOrNil: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

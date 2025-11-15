@@ -56,6 +56,43 @@ struct BillSummaryResponse: Codable {
     let isImt: Bool?
 }
 
+struct BillDetailResponse: Codable {
+    struct TaxBreakdown: Codable, Identifiable {
+        let label: String
+        let amountText: String
+        let taxLabel: String?
+        let taxAmountText: String?
+
+        var id: String { label + (taxLabel ?? "") }
+    }
+
+    struct Section: Codable, Identifiable {
+        let title: String
+        let items: [Item]
+        let subtotalText: String?
+
+        var id: String { title + (subtotalText ?? "") }
+    }
+
+    struct Item: Codable, Identifiable {
+        let title: String
+        let detail: String?
+        let quantityText: String?
+        let unitPriceText: String?
+        let amountText: String?
+
+        var id: String {
+            [title, detail, amountText].compactMap { $0 }.joined(separator: "|")
+        }
+    }
+
+    let monthText: String
+    let totalAmountText: String
+    let totalAmount: Int?
+    let taxBreakdowns: [TaxBreakdown]
+    let sections: [Section]
+}
+
 struct ServiceStatusResponse: Codable {
     struct ServiceStatus: Codable, Identifiable {
         struct SimInfo: Codable, Identifiable {

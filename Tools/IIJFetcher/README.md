@@ -8,6 +8,7 @@ IIJFetcher は IIJmio 会員サイトの非公開 API を直接叩き、通信�
 - `--mode usage` : `/service/setup/hdc/viewmonthlydata/`（回線別の月別データ利用量テーブル）
 - `--mode daily` : `/service/setup/hdc/viewdailydata/`（直近 30 日の利用量と日別サマリ）
 - `--mode all` : 上記すべてを 1 つの `AggregatePayload`（`{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}`）にまとめて出力
+- `--mode bill-detail` : `/customer/bill/detail/`（請求番号または月を指定して内訳 HTML をパース）
 
 ## 前提
 
@@ -34,6 +35,8 @@ swift run IIJFetcher --mode status
 swift run IIJFetcher --mode usage
 swift run IIJFetcher --mode daily
 swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
+swift run IIJFetcher --mode bill-detail --month 202510
+swift run IIJFetcher --mode bill-detail --bill-no 111005999429 --bill-no 111005999430
 ```
 
 3. 成功するとそれぞれの API レスポンスがそのまま整形済み JSON で標準出力に流れます。
@@ -112,6 +115,30 @@ swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
     ]
   }
 ]
+```
+
+`--mode bill-detail` は `/customer/bill/detail/` の HTML をパースして内訳を返します。
+
+```json
+{
+  "monthText": "2025年10月利用分　請求金額（税込）",
+  "totalAmountText": "1,404円",
+  "totalAmount": 1404,
+  "taxBreakdowns": [
+    { "label": "総計（税抜）", "amountText": "1,277円" },
+    { "label": "10%対象（税抜）", "amountText": "1,277円", "taxLabel": "（消費税等）", "taxAmountText": "127円" }
+  ],
+  "sections": [
+    {
+      "title": "hdc71504454 mioモバイル（ギガプラン）（MVNOサービス）",
+      "items": [
+        { "title": "月額基本料(ギガプラン)", "detail": "( 2025/10/1〜2025/10/31 )", "quantityText": "1", "unitPriceText": "1,273円", "amountText": "1,273円" },
+        { "title": "ユニバーサルサービス料※", "detail": "( 1番号あたり3円のご請求となります )", "quantityText": "1", "unitPriceText": "3円", "amountText": "3円" }
+      ],
+      "subtotalText": "1,277円"
+    }
+  ]
+}
 ```
 
 `--mode all` では `{"fetchedAt": ..., "top": ..., "bill": ..., "serviceStatus": ..., "monthlyUsage": [...], "dailyUsage": [...]}` という 1 つの JSON にまとまり、Swift アプリの `AggregatePayload` と互換です。

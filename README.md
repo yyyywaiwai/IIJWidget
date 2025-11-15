@@ -3,10 +3,10 @@
 IIJWidget は IIJmio 会員サイトの非公開 API を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報は端末のキーチェーンと App Group コンテナに保存され、アプリとウィジェットの双方で安全に共有されます。
 
 ## 特徴
-- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。初回起動時はオンボーディングが注意事項と資格情報登録を案内し、右上の「最新取得」ボタンから `WidgetRefreshService` による一括更新をいつでも実行できます。
+- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。最新月または任意の月をタップすると請求明細 (サプライ料・通話料などの内訳) も確認でき、右上の「最新取得」ボタンから `WidgetRefreshService` による一括更新をいつでも実行できます。
 - **ウィジェット拡張 (`RemainingDataWidget/`)**: ロック画面アクセサリ (Inline/Circular/Rectangular) とシステム Small/Medium を備え、App Intents (`RefreshWidgetIntent`) を使った手動リフレッシュと 30 分ごとの自動更新を両立。`WidgetDataStore` のスナップショット共有でオフライン時も最新値を表示します。
 - **共有レイヤー (`Shared/`)**: `IIJAPIClient`、`DataUsageParser`、`WidgetRefreshService`、`CredentialStore`、`WidgetDataStore` を App Group 経由で共有し、アプリ・ウィジェット・CLI が同じ `AggregatePayload` とセッションを扱えるようにしています。
-- **CLI ツール (`Tools/IIJFetcher`)**: SwiftPM 製の `IIJFetcher` が `--mode top|bill|status|usage|daily|all` をサポート。`--mode all` は `{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}` 形式でまとめて取得でき、環境変数 (`IIJ_MIO_ID` / `IIJ_PASSWORD`) でも資格情報を渡せます。
+- **CLI ツール (`Tools/IIJFetcher`)**: SwiftPM 製の `IIJFetcher` が `--mode top|bill|status|usage|daily|bill-detail|all` をサポート。`--mode all` は `{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}` 形式でまとめて取得でき、環境変数 (`IIJ_MIO_ID` / `IIJ_PASSWORD`) でも資格情報を渡せます。
 - **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要エンドポイントとレスポンス項目を整理。API のパラメータやペイロードを更新したら README / docs / CLI を必ず同期します。
 
 ## ディレクトリ構成
@@ -43,6 +43,9 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
    swift run IIJFetcher --mode status   # /api/member/getServiceStatus
    swift run IIJFetcher --mode usage    # /service/setup/hdc/viewmonthlydata/
    swift run IIJFetcher --mode daily    # /service/setup/hdc/viewdailydata/
+   # 個別請求明細 (最新月 or --month YYYYMM / --bill-no <番号>)
+   swift run IIJFetcher --mode bill-detail --month 202510
+   swift run IIJFetcher --mode bill-detail --bill-no 111005999429
    ```
    `IIJ_MIO_ID` / `IIJ_PASSWORD` 環境変数でも資格情報を渡せ、`--mode all` は `fetchedAt/top/bill/serviceStatus/monthlyUsage/dailyUsage` を 1 つの JSON に含めます。
 

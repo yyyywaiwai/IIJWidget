@@ -17,11 +17,14 @@ enum Command: String, CaseIterable {
     case all
     case usage
     case daily
+    case billDetail = "bill-detail"
 }
 
 struct CLIOptions {
     let credentials: Credentials
     let command: Command
+    let billDetailBillNos: [String]
+    let billDetailMonth: String?
 }
 
 struct APIErrorEnvelope: Decodable {
@@ -73,6 +76,43 @@ struct BillSummaryResponse: Codable {
     let billList: [BillEntry]
     let isVoiceSim: Bool?
     let isImt: Bool?
+}
+
+struct BillDetailResponse: Codable {
+    struct TaxBreakdown: Codable, Identifiable {
+        let label: String
+        let amountText: String
+        let taxLabel: String?
+        let taxAmountText: String?
+
+        var id: String { label + (taxLabel ?? "") }
+    }
+
+    struct Section: Codable, Identifiable {
+        let title: String
+        let items: [Item]
+        let subtotalText: String?
+
+        var id: String { title + (subtotalText ?? "") }
+    }
+
+    struct Item: Codable, Identifiable {
+        let title: String
+        let detail: String?
+        let quantityText: String?
+        let unitPriceText: String?
+        let amountText: String?
+
+        var id: String {
+            [title, detail, amountText].compactMap { $0 }.joined(separator: "|")
+        }
+    }
+
+    let monthText: String
+    let totalAmountText: String
+    let totalAmount: Int?
+    let taxBreakdowns: [TaxBreakdown]
+    let sections: [Section]
 }
 
 struct ServiceStatusResponse: Codable {
@@ -172,6 +212,10 @@ struct IIJFetcherCLI {
             case .daily:
                 let data = try await client.fetchDailyUsage()
                 try emitJSON(data)
+            case .billDetail:
+                let entry = try await resolveBillDetailEntry(options: options, client: client)
+                let detail = try await client.fetchBillDetail(entry: entry)
+                try emitJSON(detail)
             case .all:
                 let top = try await client.fetchTop()
                 let bill = try await client.fetchBillSummary()
@@ -207,6 +251,8 @@ struct IIJFetcherCLI {
         var mioId: String?
         var password: String?
         var command: Command = .top
+        var billNos: [String] = []
+        var billMonth: String?
         var iterator = CommandLine.arguments.dropFirst().makeIterator()
 
         while let arg = iterator.next() {
@@ -220,6 +266,16 @@ struct IIJFetcherCLI {
                     throw CLIError(message: "--mode には \(Command.allCases.map { $0.rawValue }.joined(separator: ", ")) のいずれかを指定してください")
                 }
                 command = cmd
+            case "--bill-no":
+                guard let value = iterator.next() else {
+                    throw CLIError(message: "--bill-no の後に請求番号を指定してください")
+                }
+                billNos.append(value)
+            case "--month":
+                guard let value = iterator.next() else {
+                    throw CLIError(message: "--month には YYYYMM 形式の値を指定してください")
+                }
+                billMonth = value
             case "-h", "--help":
                 printUsage()
                 exit(0)
@@ -242,7 +298,16 @@ struct IIJFetcherCLI {
             throw CLIError(message: "パスワードを --password か IIJ_PASSWORD で指定してください")
         }
 
-        return CLIOptions(credentials: Credentials(mioId: id, password: pass), command: command)
+        if let month = billMonth, month.count != 6 || Int(month) == nil {
+            throw CLIError(message: "--month には 202510 のような6桁の年月を指定してください")
+        }
+
+        return CLIOptions(
+            credentials: Credentials(mioId: id, password: pass),
+            command: command,
+            billDetailBillNos: billNos,
+            billDetailMonth: billMonth
+        )
     }
 
     private static func printUsage() {
@@ -251,8 +316,34 @@ struct IIJFetcherCLI {
         使い方: iijfetcher [--mode <\(modes)>] --mio-id <ID> --password <PASS>
           もしくは IIJ_MIO_ID / IIJ_PASSWORD を環境変数で指定してください。
         デフォルトの --mode は top です。
+        bill-detail モードでは --bill-no (複数指定可) か --month YYYYMM で対象の明細を選べます。
         """
         print(text)
+    }
+
+    private static func resolveBillDetailEntry(options: CLIOptions, client: IIJAPIClient) async throws -> BillSummaryResponse.BillEntry {
+        if !options.billDetailBillNos.isEmpty {
+            return BillSummaryResponse.BillEntry(
+                billNoList: options.billDetailBillNos,
+                month: options.billDetailMonth,
+                totalAmount: nil,
+                usedPoint: nil,
+                isUnpaid: nil
+            )
+        }
+
+        let summary = try await client.fetchBillSummary()
+        if let month = options.billDetailMonth {
+            if let entry = summary.billList.first(where: { $0.month == month }) {
+                return entry
+            }
+            throw CLIError(message: "指定した月 \(month) の請求データが見つかりませんでした")
+        }
+
+        guard let latest = summary.billList.first else {
+            throw CLIError(message: "請求サマリが空です")
+        }
+        return latest
     }
 }
 
@@ -370,6 +461,14 @@ final class IIJAPIClient {
         return services
     }
 
+    func fetchBillDetail(entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
+        let html = try await requestBillDetailHTML(for: entry)
+        guard let detail = BillDetailHTMLParser(html: html).parse() else {
+            throw CLIError(message: "請求明細の解析に失敗しました")
+        }
+        return detail
+    }
+
     private func requestDailyDetailHTML(hdoCode: String, csrfToken: String) async throws -> String? {
         guard let body = formURLEncoded([
             "hdoCode": hdoCode,
@@ -383,6 +482,28 @@ final class IIJAPIClient {
             contentType: "application/x-www-form-urlencoded"
         )
         return String(data: response, encoding: .utf8)
+    }
+
+    private func requestBillDetailHTML(for entry: BillSummaryResponse.BillEntry) async throws -> String {
+        guard let billNos = entry.billNoList, !billNos.isEmpty else {
+            throw CLIError(message: "billNoList が空です")
+        }
+        guard let body = formURLEncodedArray(name: "billNoList", values: billNos) else {
+            throw CLIError(message: "リクエストの組み立てに失敗しました")
+        }
+        let data = try await request(
+            path: "/customer/bill/detail/",
+            method: "POST",
+            body: body,
+            contentType: "application/x-www-form-urlencoded"
+        )
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw CLIError(message: "請求明細のHTMLを解釈できませんでした")
+        }
+        if html.contains("システムエラー") {
+            throw CLIError(message: "請求明細ページがエラーを返しました")
+        }
+        return html
     }
 
     private func mergeDailyServices(primary: DailyUsageService, overlay: DailyUsageService?) -> DailyUsageService {
@@ -446,5 +567,17 @@ final class IIJAPIClient {
         components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         guard let query = components.percentEncodedQuery else { return nil }
         return query.data(using: .utf8)
+    }
+
+    private func formURLEncodedArray(name: String, values: [String]) -> Data? {
+        guard !values.isEmpty else { return nil }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._* ")
+        var segments: [String] = []
+        for value in values {
+            guard var encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+            encoded = encoded.replacingOccurrences(of: " ", with: "+")
+            segments.append("\(name)=\(encoded)")
+        }
+        return segments.joined(separator: "&").data(using: .utf8)
     }
 }
