@@ -77,6 +77,9 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 - ファイルは `.gitignore` 済みなので Git 管理に含まれません。CI では `GOOGLE_SERVICE_INFO_PLIST` シークレットから復元します。
 - 新しい Firebase App ID / API Key を発行した場合は Secrets も同期してください。
 
+## ライセンス
+本プロジェクトは [MIT License](./LICENSE) の下で提供されます。
+
 ## 開発メモ
 - API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。
 - `Shared/CredentialStore.swift` は App Group 付きの Keychain へ資格情報を退避し、既存ユーザーの移行や CLI/Widget からの再利用を自動化しています。
