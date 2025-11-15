@@ -56,6 +56,7 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 
 ## CI / Firebase App Distribution
 PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.0 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
+証明書の上限に達した際は、ワークフローが App Store Connect API を通じて古い Apple Distribution 証明書を自動的に失効させ、Cloud Signing が常に新しい証明書を発行できるようにしています。CI で維持したい証明書がある場合は `ASC_PROTECTED_CERT_SERIALS` または `ASC_PROTECTED_CERT_NAMES` に登録することで、対象証明書を自動失効から除外できます。
 
 ### 必要な GitHub Secrets
 | Secret 名 | 用途 |
@@ -64,6 +65,8 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 | `ASC_API_KEY_ISSUER_ID` | App Store Connect API Key の Issuer ID |
 | `ASC_API_KEY_P8` | App Store Connect API Key (`.p8`) を Base64 化した文字列 |
 | `APPLE_TEAM_ID` | Apple Developer Team ID (例: `ABCDE12345`) |
+| `ASC_PROTECTED_CERT_SERIALS` *(任意)* | 失効させたくない証明書のシリアル番号を JSON 配列 or カンマ/改行区切りで列挙 |
+| `ASC_PROTECTED_CERT_NAMES` *(任意)* | 失効対象から除外する証明書名を JSON 配列 or カンマ/改行区切りで列挙 |
 | `FIREBASE_APP_ID` | Firebase App Distribution の iOS App ID (`1:1234567890:ios:abcdef`) |
 | `FIREBASE_SERVICE_ACCOUNT` | App Distribution API 用サービスアカウント JSON 全文 |
 | `FIREBASE_DISTRIBUTION_GROUPS` | 配布先のグループをカンマ区切りで指定 (不要なら空にできます) |
