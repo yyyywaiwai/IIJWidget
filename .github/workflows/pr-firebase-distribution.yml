@@ -22,8 +22,6 @@ env:
   PROJECT: IIJWidget.xcodeproj
   SCHEME: IIJWidget
   BUNDLE_ID: jp.yyyywaiwai.IIJWidget
-  ARCHIVE_PATH: ${{ runner.temp }}/IIJWidget.xcarchive
-  EXPORT_PATH: ${{ runner.temp }}/export
   EXPORT_METHOD: development
 
 jobs:
@@ -48,6 +46,11 @@ jobs:
             exit 1
           fi
           echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > IIJWidget/GoogleService-Info.plist
+
+      - name: Prepare build paths
+        run: |
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/IIJWidget.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
 
       - name: Select Xcode 26.1.1
         uses: maxim-lobanov/setup-xcode@v1
@@ -191,38 +194,28 @@ jobs:
             echo 'Firebase action did not return a release link' >&2
             exit 1
           fi
-          export LINK
-          export WEBHOOK_URL
-          export PR_NUMBER="${{ github.event.pull_request.number }}"
-          export PR_TITLE="${{ github.event.pull_request.title }}"
-          export COMMIT_SHA="${{ github.sha }}"
-          export AUTHOR="${{ github.event.pull_request.user.login }}"
-          python3 - <<'PY'
-import json
-import os
-import sys
-import urllib.request
-
-payload = {
-    "embeds": [
-        {
-            "title": "新しい PR ビルドが利用可能",
-            "description": f"[Install build]({os.environ['LINK']})",
-            "color": 0x5865F2,
-            "fields": [
-                {"name": "PR", "value": f"#{os.environ['PR_NUMBER']} · {os.environ['PR_TITLE']}"},
-                {"name": "Commit", "value": os.environ['COMMIT_SHA']},
-                {"name": "Author", "value": os.environ['AUTHOR']},
-            ],
-            "footer": {"text": "Firebase App Distribution"},
-        }
-    ]
-}
-
-data = json.dumps(payload).encode('utf-8')
-req = urllib.request.Request(
-    os.environ['WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'}
-)
-with urllib.request.urlopen(req) as resp:
-    resp.read()
-PY
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          COMMIT_SHA="${{ github.sha }}"
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          PAYLOAD=$(jq -n \
+            --arg link "$LINK" \
+            --arg pr "#$PR_NUMBER · $PR_TITLE" \
+            --arg commit "$COMMIT_SHA" \
+            --arg author "$AUTHOR" \
+            '{
+              embeds: [
+                {
+                  title: "新しい PR ビルドが利用可能",
+                  description: "[Install build](" + $link + ")",
+                  color: 5793266,
+                  fields: [
+                    {name: "PR", value: $pr},
+                    {name: "Commit", value: $commit},
+                    {name: "Author", value: $author}
+                  ],
+                  footer: {text: "Firebase App Distribution"}
+                }
+              ]
+            }')
+          curl -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL"
