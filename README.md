@@ -20,8 +20,8 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 ```
 
 ## 動作要件
-- macOS 14.5 以降 / Xcode 16 以降（Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
-- iOS 17 以降の実機またはシミュレータ。CI でのシミュレータ検証は iPhone 16e (iOS 26.0) のデスティネーションを使用してください。
+- macOS 14.5 以降 / Xcode 16 以降（CI では Xcode 26.1.1、Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
+- iOS 17 以降の実機またはシミュレータ。
 - IIJmio の mioID（または登録メールアドレス）とパスワード
 - App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
 
@@ -50,6 +50,25 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 - シミュレータ検証: `xcodebuild -scheme IIJWidget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build`
 - CLI のテスト (SwiftPM): `cd Tools/IIJFetcher && swift test`
 - 実機/シミュレータ動作確認: Xcode で `IIJWidget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
+
+## CI / Firebase App Distribution
+PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.1.1 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
+
+### 必要な GitHub Secrets
+| Secret 名 | 用途 |
+| --- | --- |
+| `IOS_CERTIFICATE_P12` | コード署名用証明書 (`.p12`) を Base64 文字列化したもの (`base64 -i dist.p12 | pbcopy`) |
+| `IOS_CERTIFICATE_PASSWORD` | 上記 `.p12` のパスワード |
+| `IOS_PROVISIONING_PROFILE` | `jp.yyyywaiwai.IIJWidget` のプロビジョニングプロファイルを Base64 化したもの |
+| `KEYCHAIN_PASSWORD` | CI で作る一時キーチェーンのパスワード (任意の強い文字列) |
+| `APPLE_TEAM_ID` | Apple Developer Team ID (例: `ABCDE12345`) |
+| `FIREBASE_APP_ID` | Firebase App Distribution の iOS App ID (`1:1234567890:ios:abcdef`) |
+| `FIREBASE_SERVICE_ACCOUNT` | App Distribution API 用サービスアカウント JSON 全文 |
+| `FIREBASE_DISTRIBUTION_GROUPS` | 配布先のグループをカンマ区切りで指定 (不要なら空にできます) |
+| `FIREBASE_DISTRIBUTION_TESTERS` | 個別テスターのメールアドレス (グループ未使用時に利用) |
+| `DISCORD_WEBHOOK_URL` | 成果物リンクを通知する Discord Webhook URL |
+
+`EXPORT_METHOD` はデフォルトで `development` に設定しています。AdHoc や Enterprise で配布する場合は workflow の `env` を任意のメソッドへ変更してください。Firebase へのアップロードが成功すると、`wzieba/Firebase-Distribution-Github-Action` の出力を使って Discord に `[Install build](...)` の埋め込みメッセージが送信されます。
 
 ## 開発メモ
 - API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。

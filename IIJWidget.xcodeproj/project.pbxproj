@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A55AE1082EC83E09007645F6 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = A55AE1072EC83E09007645F6 /* FirebaseAnalytics */; };
+		A55AE10A2EC83E09007645F6 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = A55AE1092EC83E09007645F6 /* FirebaseAnalyticsCore */; };
 		A56788122EC1500000C50874 /* RemainingDataWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A567880C2EC1500000C50874 /* RemainingDataWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -39,9 +41,22 @@
 		A567880C2EC1500000C50874 /* RemainingDataWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RemainingDataWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A55AE1052EC83CC4007645F6 /* Exceptions for "IIJWidget" folder in "RemainingDataWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"GoogleService-Info.plist",
+			);
+			target = A567880D2EC1500000C50874 /* RemainingDataWidget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A56787062EC1360000C50874 /* IIJWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A55AE1052EC83CC4007645F6 /* Exceptions for "IIJWidget" folder in "RemainingDataWidget" target */,
+			);
 			path = IIJWidget;
 			sourceTree = "<group>";
 		};
@@ -62,6 +77,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A55AE1082EC83E09007645F6 /* FirebaseAnalytics in Frameworks */,
+				A55AE10A2EC83E09007645F6 /* FirebaseAnalyticsCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,6 +134,8 @@
 			);
 			name = IIJWidget;
 			packageProductDependencies = (
+				A55AE1072EC83E09007645F6 /* FirebaseAnalytics */,
+				A55AE1092EC83E09007645F6 /* FirebaseAnalyticsCore */,
 			);
 			productName = IIJWidget;
 			productReference = A56787042EC1360000C50874 /* IIJWidget.app */;
@@ -173,6 +192,9 @@
 			);
 			mainGroup = A56786FB2EC1360000C50874;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A55AE1062EC83E09007645F6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A56787052EC1360000C50874 /* Products */;
 			projectDirPath = "";
@@ -500,6 +522,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A55AE1062EC83E09007645F6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A55AE1072EC83E09007645F6 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A55AE1062EC83E09007645F6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		A55AE1092EC83E09007645F6 /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A55AE1062EC83E09007645F6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A56786FC2EC1360000C50874 /* Project object */;
 }

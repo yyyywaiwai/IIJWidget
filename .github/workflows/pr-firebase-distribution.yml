@@ -1,0 +1,217 @@
+name: PR Firebase Distribution
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: pr-firebase-distribution-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  PROJECT: IIJWidget.xcodeproj
+  SCHEME: IIJWidget
+  BUNDLE_ID: jp.yyyywaiwai.IIJWidget
+  ARCHIVE_PATH: ${{ runner.temp }}/IIJWidget.xcarchive
+  EXPORT_PATH: ${{ runner.temp }}/export
+  EXPORT_METHOD: development
+
+jobs:
+  distribute:
+    name: Archive & Distribute
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Select Xcode 26.1.1
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.1.1'
+
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -resolvePackageDependencies
+
+      - name: Install signing assets
+        id: signing
+        env:
+          P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          if [ -z "$P12_BASE64" ] || [ -z "$PROFILE_BASE64" ]; then
+            echo 'Signing secrets are missing' >&2
+            exit 1
+          fi
+          CERT_PATH="$RUNNER_TEMP/dist.p12"
+          echo "$P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '" ')
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+          security default-keychain -s "$KEYCHAIN_PATH"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "profile-uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "profile-name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Create export options
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
+        run: |
+          set -euo pipefail
+          EXPORT_OPTIONS_PLIST="$RUNNER_TEMP/exportOptions.plist"
+          cat <<EOF2 > "$EXPORT_OPTIONS_PLIST"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>compileBitcode</key>
+              <false/>
+              <key>destination</key>
+              <string>export</string>
+              <key>method</key>
+              <string>$EXPORT_METHOD</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                <key>$BUNDLE_ID</key>
+                <string>$PROFILE_NAME</string>
+              </dict>
+            </dict>
+          </plist>
+          EOF2
+          echo "EXPORT_OPTIONS_PLIST=$EXPORT_OPTIONS_PLIST" >> "$GITHUB_ENV"
+
+      - name: Archive IIJWidget
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            clean archive
+
+      - name: Export IPA
+        run: |
+          set -o pipefail
+          mkdir -p "$EXPORT_PATH"
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
+
+      - name: Locate IPA
+        id: ipa
+        run: |
+          IPA_PATH=$(find "$EXPORT_PATH" -type f -name '*.ipa' | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo 'IPA file not found' >&2
+            exit 1
+          fi
+          echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Firebase App Distribution
+        id: firebase
+        uses: wzieba/Firebase-Distribution-Github-Action@v2
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: ${{ secrets.FIREBASE_DISTRIBUTION_GROUPS }}
+          testers: ${{ secrets.FIREBASE_DISTRIBUTION_TESTERS }}
+          file: ${{ steps.ipa.outputs.path }}
+          releaseNotes: |
+            PR #${{ github.event.pull_request.number }} · ${{ github.event.pull_request.title }}
+            Author: ${{ github.event.pull_request.user.login }}
+            Commit: ${{ github.sha }}
+
+      - name: Notify Discord
+        if: ${{ success() }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_URL: ${{ steps.firebase.outputs.release-url }}
+          DOWNLOAD_URL: ${{ steps.firebase.outputs.release-download-url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo 'Discord webhook URL is not configured' >&2
+            exit 1
+          fi
+          LINK="$RELEASE_URL"
+          if [ -z "$LINK" ]; then
+            LINK="$DOWNLOAD_URL"
+          fi
+          if [ -z "$LINK" ]; then
+            echo 'Firebase action did not return a release link' >&2
+            exit 1
+          fi
+          export LINK
+          export WEBHOOK_URL
+          export PR_NUMBER="${{ github.event.pull_request.number }}"
+          export PR_TITLE="${{ github.event.pull_request.title }}"
+          export COMMIT_SHA="${{ github.sha }}"
+          export AUTHOR="${{ github.event.pull_request.user.login }}"
+          python3 - <<'PY'
+import json
+import os
+import sys
+import urllib.request
+
+payload = {
+    "embeds": [
+        {
+            "title": "新しい PR ビルドが利用可能",
+            "description": f"[Install build]({os.environ['LINK']})",
+            "color": 0x5865F2,
+            "fields": [
+                {"name": "PR", "value": f"#{os.environ['PR_NUMBER']} · {os.environ['PR_TITLE']}"},
+                {"name": "Commit", "value": os.environ['COMMIT_SHA']},
+                {"name": "Author", "value": os.environ['AUTHOR']},
+            ],
+            "footer": {"text": "Firebase App Distribution"},
+        }
+    ]
+}
+
+data = json.dumps(payload).encode('utf-8')
+req = urllib.request.Request(
+    os.environ['WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'}
+)
+with urllib.request.urlopen(req) as resp:
+    resp.read()
+PY
