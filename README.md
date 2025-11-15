@@ -25,7 +25,6 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 - IIJmio の mioID（または登録メールアドレス）とパスワード
 - App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
 - Firebase プロジェクトの `GoogleService-Info.plist`（`IIJWidget/` 直下に配置、Git には含めないでください）
-- `IIJWidget` と `RemainingDataWidget` それぞれの Apple Developer プロビジョニングプロファイル（CI では Base64 化してシークレットに登録）
 
 ## セットアップ手順
 1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git && cd IIJWidget`。
@@ -59,11 +58,9 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 ### 必要な GitHub Secrets
 | Secret 名 | 用途 |
 | --- | --- |
-| `IOS_CERTIFICATE_P12` | コード署名用証明書 (`.p12`) を Base64 文字列化したもの (`base64 -i dist.p12 | pbcopy`) |
-| `IOS_CERTIFICATE_PASSWORD` | 上記 `.p12` のパスワード |
-| `IOS_PROVISIONING_PROFILE` | `jp.yyyywaiwai.IIJWidget` のプロビジョニングプロファイルを Base64 化したもの |
-| `IOS_PROVISIONING_PROFILE_WIDGET` | `jp.yyyywaiwai.IIJWidget.RemainingDataWidget` のプロビジョニングプロファイルを Base64 化したもの |
-| `KEYCHAIN_PASSWORD` | CI で作る一時キーチェーンのパスワード (任意の強い文字列) |
+| `ASC_API_KEY_ID` | App Store Connect API Key の Key ID |
+| `ASC_API_KEY_ISSUER_ID` | App Store Connect API Key の Issuer ID |
+| `ASC_API_KEY_P8` | App Store Connect API Key (`.p8`) を Base64 化した文字列 |
 | `APPLE_TEAM_ID` | Apple Developer Team ID (例: `ABCDE12345`) |
 | `FIREBASE_APP_ID` | Firebase App Distribution の iOS App ID (`1:1234567890:ios:abcdef`) |
 | `FIREBASE_SERVICE_ACCOUNT` | App Distribution API 用サービスアカウント JSON 全文 |
@@ -72,7 +69,7 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 | `DISCORD_WEBHOOK_URL` | 成果物リンクを通知する Discord Webhook URL |
 | `GOOGLE_SERVICE_INFO_PLIST` | `GoogleService-Info.plist` を `base64 -i` でエンコードした文字列。CI で復元して `IIJWidget/` に配置します |
 
-`EXPORT_METHOD` はデフォルトで `development` に設定しています。AdHoc や Enterprise で配布する場合は workflow の `env` を任意のメソッドへ変更してください。Firebase へのアップロードが成功すると、`wzieba/Firebase-Distribution-Github-Action` の出力を使って Discord に `[Install build](...)` の埋め込みメッセージが送信されます。コード署名は `CODE_SIGN_IDENTITY`（既定 `Apple Distribution`）と 2 種類のプロビジョニングプロファイルで明示的に行うため、証明書・プロファイルの組を揃えてください。
+`EXPORT_METHOD` はデフォルトで `development` に設定しています。AdHoc や Enterprise で配布する場合は workflow の `env` を任意のメソッドへ変更してください。Firebase へのアップロードが成功すると、`wzieba/Firebase-Distribution-Github-Action` の出力を使って Discord に `[Install build](...)` の埋め込みメッセージが送信されます。コード署名は Xcode の Automatically manage signing と App Store Connect API Key (Cloud Signing) で行うため、`.p8` キーを Secrets に登録すれば証明書やプロビジョニングプロファイルを配布する必要はありません。
 
 ### ローカル開発での Firebase 設定
 - Firebase Console → プロジェクト設定 → 一般 → 対象 iOS アプリから `GoogleService-Info.plist` をダウンロードし、`IIJWidget/GoogleService-Info.plist` として配置します。
