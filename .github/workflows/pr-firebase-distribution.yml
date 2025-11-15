@@ -60,6 +60,9 @@ jobs:
       - name: Resolve Swift package dependencies
         run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -resolvePackageDependencies
 
+      - name: Install iOS platform support
+        run: sudo xcodebuild -downloadPlatform iOS
+
       - name: Install signing assets
         id: signing
         env:
@@ -137,7 +140,7 @@ jobs:
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$ARCHIVE_PATH" \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -allowProvisioningUpdates \
             clean archive
 
