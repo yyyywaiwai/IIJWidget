@@ -38,6 +38,17 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo 'GOOGLE_SERVICE_INFO_PLIST secret is not configured' >&2
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > IIJWidget/GoogleService-Info.plist
+
       - name: Select Xcode 26.1.1
         uses: maxim-lobanov/setup-xcode@v1
         with:

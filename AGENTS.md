@@ -33,3 +33,4 @@
 ## Security & Configuration Tips
 - Store sensitive credentials outside of the repo; use app groups (`Shared/AppGroup.swift`) and Keychain-backed stores rather than hard coding tokens.
 - Update `Shared/CredentialStore.swift` when API requirements change and note new entitlements (e.g., Background Modes) in the README or docs.
+- `IIJWidget/GoogleService-Info.plist` は Firebase Console から取得し、Git 管理外（`.gitignore` 済み）。CI には Base64 でシークレットとして渡すこと。

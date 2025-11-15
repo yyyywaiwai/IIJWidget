@@ -37,3 +37,4 @@ Tools/IIJFetcher/.build/
 
 # Custom
 *.swp
+IIJWidget/GoogleService-Info.plist
