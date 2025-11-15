@@ -187,7 +187,7 @@ def request(method: str, path: str, *, data: dict | None = None) -> dict | None:
         raise SystemExit(f'App Store Connect API request failed ({error.code}): {message}')
 
 
-response = request('GET', '/v1/certificates?filter[type]=IOS_DISTRIBUTION&fields[certificates]=name,serialNumber,expirationDate,certificateType,dateCreated')
+response = request('GET', '/v1/certificates?filter[certificateType]=IOS_DISTRIBUTION&fields[certificates]=name,serialNumber,expirationDate,certificateType,dateCreated')
 if response is None:
     sys.exit(0)
 
