@@ -88,4 +88,4 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 - 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`IIJAPIClient` のログで HTTP ステータスや `error` コードを確認してください。
 
 ## ライセンス
-本プロジェクトは [MIT License](./LICENSE) の下で提供されます。
+© 2025 yyyywaiwai. 本プロジェクトは [MIT License](./LICENSE) の下で提供されます。
