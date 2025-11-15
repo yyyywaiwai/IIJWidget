@@ -152,7 +152,6 @@ struct ContentView: View {
 
 struct HomeDashboardTab: View {
     let payload: AggregatePayload?
-    private let columns = [GridItem(.adaptive(minimum: 320), spacing: 16)]
 
     var body: some View {
         Group {
@@ -164,10 +163,10 @@ struct HomeDashboardTab: View {
                             latestBillAmount: payload.bill.latestEntry?.plainAmountText
                         )
 
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            MonthlyUsageChartCard(services: payload.monthlyUsage)
-                            DailyUsageChartCard(services: payload.dailyUsage)
-                        }
+                        UsageGraphCard(
+                            monthlyServices: payload.monthlyUsage,
+                            dailyServices: payload.dailyUsage
+                        )
                     }
                     .padding()
                 }
@@ -650,7 +649,43 @@ struct DashboardCard<Content: View>: View {
     }
 }
 
-struct MonthlyUsageChartCard: View {
+struct UsageGraphCard: View {
+    let monthlyServices: [MonthlyUsageService]
+    let dailyServices: [DailyUsageService]
+
+    @State private var selectedChartType: ChartType = .daily
+
+    enum ChartType: String, CaseIterable {
+        case daily = "日別"
+        case monthly = "月別"
+    }
+
+    var body: some View {
+        let cardTitle = "データ利用量"
+        let cardSubtitle = selectedChartType == .daily ? "日別履歴 (MB)" : "月別履歴 (GB)"
+
+        DashboardCard(title: cardTitle, subtitle: cardSubtitle) {
+            VStack {
+                Picker("グラフ種別", selection: $selectedChartType) {
+                    ForEach(ChartType.allCases, id: \.self) { type in
+                        Text(type.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.bottom, 8)
+
+                switch selectedChartType {
+                case .daily:
+                    DailyUsageChartContent(services: dailyServices)
+                case .monthly:
+                    MonthlyUsageChartContent(services: monthlyServices)
+                }
+            }
+        }
+    }
+}
+
+struct MonthlyUsageChartContent: View {
     let services: [MonthlyUsageService]
     @State private var selectedIndex: Int?
     private var points: [UsageChartPoint] {
@@ -668,15 +703,12 @@ struct MonthlyUsageChartCard: View {
     }
 
     var body: some View {
-        DashboardCard(title: "月別データ利用量", subtitle: "直近6か月 (GB)") {
-            if indexedPoints.isEmpty {
-                ChartPlaceholder(text: "まだデータがありません")
-            } else {
-                chartContent
-                    .frame(height: 220)
-                    .onAppear { selectedIndex = defaultSelectionIndex }
-                    .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
-            }
+        if indexedPoints.isEmpty {
+            ChartPlaceholder(text: "まだデータがありません")
+        } else {
+            chartContent
+                .onAppear { selectedIndex = defaultSelectionIndex }
+                .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
         }
     }
 
@@ -750,6 +782,7 @@ struct MonthlyUsageChartCard: View {
                 }
             }
         }
+        .frame(height: 220)
     }
 
     private var axisPositions: [Double] {
@@ -803,7 +836,7 @@ struct MonthlyUsageChartCard: View {
     }
 }
 
-struct DailyUsageChartCard: View {
+struct DailyUsageChartContent: View {
     let services: [DailyUsageService]
     @State private var selectedIndex: Int?
 
@@ -831,15 +864,12 @@ struct DailyUsageChartCard: View {
     }
 
     var body: some View {
-        DashboardCard(title: "日別データ利用量", subtitle: "履歴 (MB)") {
-            if indexedPoints.isEmpty {
-                ChartPlaceholder(text: "まだデータがありません")
-            } else {
-                chartContent
-                    .frame(height: 220)
-                    .onAppear { selectedIndex = defaultSelectionIndex }
-                    .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
-            }
+        if indexedPoints.isEmpty {
+            ChartPlaceholder(text: "まだデータがありません")
+        } else {
+            chartContent
+                .onAppear { selectedIndex = defaultSelectionIndex }
+                .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
         }
     }
 
@@ -907,6 +937,7 @@ struct DailyUsageChartCard: View {
                 }
             }
         }
+        .frame(height: 220)
     }
 
     private var axisPositions: [Double] {
