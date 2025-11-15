@@ -24,7 +24,6 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 - iOS 17 以降の実機またはシミュレータ。
 - IIJmio の mioID（または登録メールアドレス）とパスワード
 - App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
-- Firebase プロジェクトの `GoogleService-Info.plist`（`IIJWidget/` 直下に配置、Git には含めないでください）
 
 ## セットアップ手順
 1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git && cd IIJWidget`。
@@ -70,14 +69,11 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 | `FIREBASE_DISTRIBUTION_GROUPS` | 配布先のグループをカンマ区切りで指定 (不要なら空にできます) |
 | `FIREBASE_DISTRIBUTION_TESTERS` | 個別テスターのメールアドレス (グループ未使用時に利用) |
 | `DISCORD_WEBHOOK_URL` | 成果物リンクを通知する Discord Webhook URL |
-| `GOOGLE_SERVICE_INFO_PLIST` | `GoogleService-Info.plist` を `base64 -i` でエンコードした文字列。CI で復元して `IIJWidget/` に配置します |
 
 `EXPORT_METHOD` はデフォルトで `development` に設定しています。AdHoc や Enterprise で配布する場合は workflow の `env` を任意のメソッドへ変更してください。Firebase へのアップロードが成功すると、`wzieba/Firebase-Distribution-Github-Action` の出力を使って Discord に `[Install build](...)` の埋め込みメッセージが送信されます。コード署名は Xcode の Automatically manage signing と App Store Connect API Key (Cloud Signing) で行うため、`.p8` キーを Secrets に登録すれば証明書やプロビジョニングプロファイルを配布する必要はありません。
 
-### ローカル開発での Firebase 設定
-- Firebase Console → プロジェクト設定 → 一般 → 対象 iOS アプリから `GoogleService-Info.plist` をダウンロードし、`IIJWidget/GoogleService-Info.plist` として配置します。
-- ファイルは `.gitignore` 済みなので Git 管理に含まれません。CI では `GOOGLE_SERVICE_INFO_PLIST` シークレットから復元します。
-- 新しい Firebase App ID / API Key を発行した場合は Secrets も同期してください。
+### Firebase SDK について
+アプリ本体・ウィジェット共に Firebase App SDK を利用していないため、`GoogleService-Info.plist` の設置や CI での復元手順は不要です。Firebase 関連の Secrets は App Distribution 用 (`FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT` など) のみ設定してください。
 
 ## 開発メモ
 - API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。

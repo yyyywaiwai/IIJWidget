@@ -9,9 +9,10 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  workflow_dispatch:
 
 concurrency:
-  group: pr-firebase-distribution-${{ github.event.pull_request.number }}
+  group: pr-firebase-distribution-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -30,7 +31,7 @@ env:
 jobs:
   build:
     name: Build IPA
-    if: ${{ github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -38,17 +39,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: Restore Firebase config
-        env:
-          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
-        run: |
-          set -euo pipefail
-          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then
-            echo 'GOOGLE_SERVICE_INFO_PLIST secret is not configured' >&2
-            exit 1
-          fi
-          echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > IIJWidget/GoogleService-Info.plist
 
       - name: Prepare build paths
         run: |
@@ -162,7 +152,7 @@ jobs:
 
   distribute:
     name: Firebase Upload & Discord
-    if: ${{ github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -184,6 +174,34 @@ jobs:
           fi
           echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Compose release notes
+        id: release_notes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
+          PR_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
+        run: |
+          set -euo pipefail
+          NOTES_PATH="$RUNNER_TEMP/release-notes.txt"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            {
+              echo "PR #$PR_NUMBER · $PR_TITLE"
+              echo "Author: $PR_AUTHOR"
+              echo "Commit: $SHA"
+            } > "$NOTES_PATH"
+          else
+            {
+              echo "Manual trigger on $REF"
+              echo "Actor: $ACTOR"
+              echo "Commit: $SHA"
+            } > "$NOTES_PATH"
+          fi
+          echo "path=$NOTES_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Ensure Firebase credentials exist
         run: |
           if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
@@ -200,10 +218,7 @@ jobs:
           groups: ${{ secrets.FIREBASE_DISTRIBUTION_GROUPS }}
           testers: ${{ secrets.FIREBASE_DISTRIBUTION_TESTERS }}
           file: ${{ steps.ipa.outputs.path }}
-          releaseNotes: |
-            PR #${{ github.event.pull_request.number }} · ${{ github.event.pull_request.title }}
-            Author: ${{ github.event.pull_request.user.login }}
-            Commit: ${{ github.sha }}
+          releaseNotesFile: ${{ steps.release_notes.outputs.path }}
 
       - name: Notify Discord
         if: ${{ success() }}
@@ -212,6 +227,13 @@ jobs:
           RELEASE_URL: ${{ steps.firebase.outputs.FIREBASE_CONSOLE_URI }}
           DOWNLOAD_URL: ${{ steps.firebase.outputs.TESTING_URI }}
           BINARY_URL: ${{ steps.firebase.outputs.BINARY_DOWNLOAD_URI }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
+          PR_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK_URL" ]; then
@@ -229,26 +251,40 @@ jobs:
             echo 'Firebase action did not return a release link' >&2
             exit 1
           fi
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          COMMIT_SHA="${{ github.sha }}"
-          AUTHOR="${{ github.event.pull_request.user.login }}"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            EMBED_TITLE="新しい PR ビルドが利用可能"
+            EMBED_FIELDS=$(jq -n \
+              --arg pr "#$PR_NUMBER · $PR_TITLE" \
+              --arg commit "$SHA" \
+              --arg author "$PR_AUTHOR" \
+              '[
+                {name: "PR", value: $pr},
+                {name: "Commit", value: $commit},
+                {name: "Author", value: $author}
+              ]')
+          else
+            EMBED_TITLE="手動トリガーのビルドが利用可能"
+            EMBED_FIELDS=$(jq -n \
+              --arg ref "$REF" \
+              --arg commit "$SHA" \
+              --arg actor "$ACTOR" \
+              '[
+                {name: "Ref", value: $ref},
+                {name: "Commit", value: $commit},
+                {name: "Actor", value: $actor}
+              ]')
+          fi
           PAYLOAD=$(jq -n \
             --arg link "$LINK" \
-            --arg pr "#$PR_NUMBER · $PR_TITLE" \
-            --arg commit "$COMMIT_SHA" \
-            --arg author "$AUTHOR" \
+            --arg title "$EMBED_TITLE" \
+            --argjson fields "$EMBED_FIELDS" \
             '{
               embeds: [
                 {
-                  title: "新しい PR ビルドが利用可能",
+                  title: $title,
                   description: "[Install build](\($link))",
                   color: 5793266,
-                  fields: [
-                    {name: "PR", value: $pr},
-                    {name: "Commit", value: $commit},
-                    {name: "Author", value: $author}
-                  ],
+                  fields: $fields,
                   footer: {text: "Firebase App Distribution"}
                 }
               ]
