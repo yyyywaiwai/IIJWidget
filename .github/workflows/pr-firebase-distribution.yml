@@ -28,8 +28,8 @@ env:
   CODE_SIGN_IDENTITY: Apple Distribution
 
 jobs:
-  distribute:
-    name: Archive & Distribute
+  build:
+    name: Build IPA
     if: ${{ github.event.pull_request.draft == false }}
     runs-on: macos-15
     timeout-minutes: 45
@@ -153,6 +153,44 @@ jobs:
           fi
           echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ipa
+          path: ${{ steps.ipa.outputs.path }}
+          if-no-files-found: error
+
+  distribute:
+    name: Firebase Upload & Discord
+    if: ${{ github.event.pull_request.draft == false }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-ipa
+          path: ./dist
+
+      - name: Locate IPA
+        id: ipa
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(find ./dist -maxdepth 2 -type f -name '*.ipa' | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo 'Downloaded IPA not found' >&2
+            exit 1
+          fi
+          echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Firebase credentials exist
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo 'FIREBASE_SERVICE_ACCOUNT is empty. Is this run from a fork?' >&2
+            exit 1
+          fi
+
       - name: Upload to Firebase App Distribution
         id: firebase
         uses: wzieba/Firebase-Distribution-Github-Action@v1.7.1
@@ -171,8 +209,9 @@ jobs:
         if: ${{ success() }}
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          RELEASE_URL: ${{ steps.firebase.outputs.release-url }}
-          DOWNLOAD_URL: ${{ steps.firebase.outputs.release-download-url }}
+          RELEASE_URL: ${{ steps.firebase.outputs.FIREBASE_CONSOLE_URI }}
+          DOWNLOAD_URL: ${{ steps.firebase.outputs.TESTING_URI }}
+          BINARY_URL: ${{ steps.firebase.outputs.BINARY_DOWNLOAD_URI }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK_URL" ]; then
@@ -182,6 +221,9 @@ jobs:
           LINK="$RELEASE_URL"
           if [ -z "$LINK" ]; then
             LINK="$DOWNLOAD_URL"
+          fi
+          if [ -z "$LINK" ]; then
+            LINK="$BINARY_URL"
           fi
           if [ -z "$LINK" ]; then
             echo 'Firebase action did not return a release link' >&2
@@ -200,7 +242,7 @@ jobs:
               embeds: [
                 {
                   title: "新しい PR ビルドが利用可能",
-                  description: "[Install build](" + $link + ")",
+                  description: "[Install build](\($link))",
                   color: 5793266,
                   fields: [
                     {name: "PR", value: $pr},
