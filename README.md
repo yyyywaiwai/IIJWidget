@@ -82,7 +82,6 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 - `Shared/DataUsageParser.swift` は `viewmonthlydata` / `viewdailydata` HTML から共通モデルを生成します。会員サイトのフォームやテーブル構造が変わった場合はここを更新してください。
 
 ## セキュリティ上の注意
-- 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。
 - 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`IIJAPIClient` のログで HTTP ステータスや `error` コードを確認してください。
 
 ## ライセンス
