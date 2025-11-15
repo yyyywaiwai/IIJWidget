@@ -165,8 +165,10 @@ struct HomeDashboardTab: View {
                         )
 
                         LazyVGrid(columns: columns, spacing: 16) {
-                            MonthlyUsageChartCard(services: payload.monthlyUsage)
-                            DailyUsageChartCard(services: payload.dailyUsage)
+                            UsageChartSwitcher(
+                                monthlyServices: payload.monthlyUsage,
+                                dailyServices: payload.dailyUsage
+                            )
                         }
                     }
                     .padding()
@@ -177,6 +179,53 @@ struct HomeDashboardTab: View {
             }
         }
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+struct UsageChartSwitcher: View {
+    enum Tab: String, CaseIterable, Identifiable {
+        case monthly
+        case daily
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .monthly:
+                return "月別"
+            case .daily:
+                return "日別"
+            }
+        }
+    }
+
+    let monthlyServices: [MonthlyUsageService]
+    let dailyServices: [DailyUsageService]
+
+    @State private var selection: Tab = .monthly
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Picker("利用量表示", selection: $selection) {
+                ForEach(UsageChartSwitcher.Tab.allCases) { tab in
+                    Text(tab.label).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            ZStack {
+                MonthlyUsageChartCard(services: monthlyServices)
+                    .opacity(selection == .monthly ? 1 : 0)
+                    .allowsHitTesting(selection == .monthly)
+                    .accessibilityHidden(selection != .monthly)
+
+                DailyUsageChartCard(services: dailyServices)
+                    .opacity(selection == .daily ? 1 : 0)
+                    .allowsHitTesting(selection == .daily)
+                    .accessibilityHidden(selection != .daily)
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.88), value: selection)
+        }
     }
 }
 
@@ -714,22 +763,22 @@ struct MonthlyUsageChartCard: View {
         }
         .chartXAxis {
             AxisMarks(values: axisPositions) { value in
-                if let doubleValue = value.as(Double.self) {
-                    let index = index(from: doubleValue)
-                    if let index, index < indexedPoints.count {
-                        AxisGridLine(centered: true)
-                        AxisTick(centered: true)
-                    }
+                if let doubleValue = value.as(Double.self),
+                   let index = index(from: doubleValue),
+                   indexedPoints.indices.contains(index) {
+                    AxisGridLine(centered: true)
+                    AxisTick(centered: true)
                 }
             }
         }
-        .chartXScale(domain: centeredDomain(forCount: indexedPoints.count))
+        .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
         .chartXSelection(value: chartSelectionBinding)
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                     axisLabelsLayer(proxy: proxy, geometry: geometry)
                         .allowsHitTesting(false)
+
                     Rectangle()
                         .fill(.clear)
                         .contentShape(Rectangle())
@@ -742,7 +791,8 @@ struct MonthlyUsageChartCard: View {
                                     let origin = frameRect.origin
                                     let xPosition = value.location.x - origin.x
                                     guard xPosition >= 0, xPosition <= frameRect.width else { return }
-                                    if let axisValue: Double = proxy.value(atX: xPosition), let newIndex = index(from: axisValue) {
+                                    if let axisValue: Double = proxy.value(atX: xPosition),
+                                       let newIndex = index(from: axisValue) {
                                         selectedIndex = newIndex
                                     }
                                 }
@@ -750,6 +800,7 @@ struct MonthlyUsageChartCard: View {
                 }
             }
         }
+        .padding(.bottom, axisLabelPadding)
     }
 
     private var axisPositions: [Double] {
@@ -775,32 +826,40 @@ struct MonthlyUsageChartCard: View {
     }
 
     private func centeredValue(for index: Int) -> Double {
-        Double(index) + 0.5
+        Double(index)
     }
 
-    private func index(from value: Double) -> Int? {
-        guard !indexedPoints.isEmpty else { return nil }
-        let lowerBound = 0.5
-        let upperBound = Double(indexedPoints.count) - 0.5
-        let normalized = min(max(value, lowerBound), upperBound)
-        let derived = Int((normalized - 0.5).rounded())
-        guard indexedPoints.indices.contains(derived) else { return nil }
-        return derived
-    }
+    private var axisLabelPadding: CGFloat { 18 }
 
     @ViewBuilder
     private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
         let plotFrame = proxy.plotAreaFrame
-        let plotRect = geometry[plotFrame]
-        ForEach(Array(indexedPoints.enumerated()), id: \.offset) { entry in
-            if let positionX = proxy.position(forX: centeredValue(for: entry.element.index)) {
-                Text(entry.element.point.displayLabel)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .position(x: plotRect.origin.x + positionX, y: plotRect.maxY + 14)
+        let rect = geometry[plotFrame]
+        ZStack(alignment: .topLeading) {
+            ForEach(indexedPoints, id: \.point.id) { entry in
+                if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
+                    Text(entry.point.displayLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .position(
+                            x: rect.minX + xPosition,
+                            y: rect.maxY + axisLabelPadding
+                        )
+                }
             }
         }
     }
+
+    private func index(from value: Double) -> Int? {
+        guard !indexedPoints.isEmpty else { return nil }
+        let lowerBound = 0.0
+        let upperBound = Double(indexedPoints.count - 1)
+        let normalized = min(max(value, lowerBound), upperBound)
+        let derived = Int(normalized.rounded())
+        guard indexedPoints.indices.contains(derived) else { return nil }
+        return derived
+    }
+
 }
 
 struct DailyUsageChartCard: View {
@@ -849,7 +908,7 @@ struct DailyUsageChartCard: View {
                 BarMark(
                     x: .value("日インデックス", centeredValue(for: entry.index)),
                     y: .value("合計(MB)", entry.point.value),
-                    width: .fixed(34)
+                    width: .fixed(barWidth)
                 )
                 .foregroundStyle(
                     LinearGradient(
@@ -874,19 +933,22 @@ struct DailyUsageChartCard: View {
         }
         .chartXAxis {
             AxisMarks(values: axisPositions) { value in
-                if let doubleValue = value.as(Double.self), let index = index(from: doubleValue), index < indexedPoints.count {
+                if let doubleValue = value.as(Double.self),
+                   let index = index(from: doubleValue),
+                   indexedPoints.indices.contains(index) {
                     AxisGridLine(centered: true)
                     AxisTick(centered: true)
                 }
             }
         }
-        .chartXScale(domain: centeredDomain(forCount: indexedPoints.count))
+        .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
         .chartXSelection(value: chartSelectionBinding)
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                     axisLabelsLayer(proxy: proxy, geometry: geometry)
                         .allowsHitTesting(false)
+
                     Rectangle()
                         .fill(.clear)
                         .contentShape(Rectangle())
@@ -899,7 +961,8 @@ struct DailyUsageChartCard: View {
                                     let origin = frameRect.origin
                                     let xPosition = value.location.x - origin.x
                                     guard xPosition >= 0, xPosition <= frameRect.width else { return }
-                                    if let axisValue: Double = proxy.value(atX: xPosition), let newIndex = index(from: axisValue) {
+                                    if let axisValue: Double = proxy.value(atX: xPosition),
+                                       let newIndex = index(from: axisValue) {
                                         selectedIndex = newIndex
                                     }
                                 }
@@ -907,10 +970,18 @@ struct DailyUsageChartCard: View {
                 }
             }
         }
+        .padding(.bottom, axisLabelPadding)
     }
 
     private var axisPositions: [Double] {
         indexedPoints.map { centeredValue(for: $0.index) }
+    }
+
+    private var barWidth: CGFloat {
+        let totalCount = max(1, indexedPoints.count)
+        let availableWidth: CGFloat = 260
+        let computed = availableWidth / CGFloat(totalCount)
+        return max(4, min(20, computed))
     }
 
     private var chartSelectionBinding: Binding<Double?> {
@@ -932,32 +1003,40 @@ struct DailyUsageChartCard: View {
     }
 
     private func centeredValue(for index: Int) -> Double {
-        Double(index) + 0.5
+        Double(index)
     }
 
-    private func index(from value: Double) -> Int? {
-        guard !indexedPoints.isEmpty else { return nil }
-        let lowerBound = 0.5
-        let upperBound = Double(indexedPoints.count) - 0.5
-        let normalized = min(max(value, lowerBound), upperBound)
-        let derived = Int((normalized - 0.5).rounded())
-        guard indexedPoints.indices.contains(derived) else { return nil }
-        return derived
-    }
+    private var axisLabelPadding: CGFloat { 18 }
 
     @ViewBuilder
     private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
         let plotFrame = proxy.plotAreaFrame
-        let plotRect = geometry[plotFrame]
-        ForEach(Array(indexedPoints.enumerated()), id: \.offset) { entry in
-            if let positionX = proxy.position(forX: centeredValue(for: entry.element.index)) {
-                Text(entry.element.point.displayLabel)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .position(x: plotRect.origin.x + positionX, y: plotRect.maxY + 14)
+        let rect = geometry[plotFrame]
+        ZStack(alignment: .topLeading) {
+            ForEach(indexedPoints, id: \.point.id) { entry in
+                if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
+                    Text(entry.point.displayLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .position(
+                            x: rect.minX + xPosition,
+                            y: rect.maxY + axisLabelPadding
+                        )
+                }
             }
         }
     }
+
+    private func index(from value: Double) -> Int? {
+        guard !indexedPoints.isEmpty else { return nil }
+        let lowerBound = 0.0
+        let upperBound = Double(indexedPoints.count - 1)
+        let normalized = min(max(value, lowerBound), upperBound)
+        let derived = Int(normalized.rounded())
+        guard indexedPoints.indices.contains(derived) else { return nil }
+        return derived
+    }
+
 }
 
 struct BillingHighlightCard: View {
@@ -1030,21 +1109,26 @@ struct BillingBarChart: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: axisPositions) { _ in
-                        AxisGridLine(centered: true)
-                        AxisTick(centered: true)
+                    AxisMarks(values: axisPositions) { value in
+                        if let doubleValue = value.as(Double.self),
+                           let index = index(from: doubleValue),
+                           indexedPoints.indices.contains(index) {
+                            AxisGridLine(centered: true)
+                            AxisTick(centered: true)
+                        }
                     }
                 }
                 .chartYAxis {
                     AxisMarks(position: .leading)
                 }
-                .chartXScale(domain: centeredDomain(forCount: indexedPoints.count))
+                .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
                         axisLabelsLayer(proxy: proxy, geometry: geometry)
                             .allowsHitTesting(false)
                     }
                 }
+                .padding(.bottom, axisLabelPadding)
                 .frame(height: 260)
             }
         }
@@ -1063,22 +1147,40 @@ struct BillingBarChart: View {
     }
 
     private func centeredValue(for index: Int) -> Double {
-        Double(index) + 0.5
+        Double(index)
     }
+
+    private var axisLabelPadding: CGFloat { 18 }
 
     @ViewBuilder
     private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
         let plotFrame = proxy.plotAreaFrame
-        let plotRect = geometry[plotFrame]
-        ForEach(Array(indexedPoints.enumerated()), id: \.offset) { entry in
-            if let positionX = proxy.position(forX: centeredValue(for: entry.element.index)) {
-                Text(billingAxisLabel(for: entry.element.point))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .position(x: plotRect.origin.x + positionX, y: plotRect.maxY + 14)
+        let rect = geometry[plotFrame]
+        ZStack(alignment: .topLeading) {
+            ForEach(indexedPoints, id: \.point.id) { entry in
+                if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
+                    Text(billingAxisLabel(for: entry.point))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .position(
+                            x: rect.minX + xPosition,
+                            y: rect.maxY + axisLabelPadding
+                        )
+                }
             }
         }
     }
+
+    private func index(from value: Double) -> Int? {
+        guard !indexedPoints.isEmpty else { return nil }
+        let lowerBound = 0.0
+        let upperBound = Double(indexedPoints.count - 1)
+        let normalized = min(max(value, lowerBound), upperBound)
+        let derived = Int(normalized.rounded())
+        guard indexedPoints.indices.contains(derived) else { return nil }
+        return derived
+    }
+
 }
 
 struct ChartPlaceholder: View {
@@ -1279,11 +1381,6 @@ private func discreteDomain(forCount count: Int) -> ClosedRange<Double> {
     guard count > 0 else { return -0.5...0.5 }
     let upperBound = Double(count - 1) + 0.5
     return -0.5...upperBound
-}
-
-private func centeredDomain(forCount count: Int) -> ClosedRange<Double> {
-    guard count > 0 else { return 0...1 }
-    return 0...Double(count)
 }
 
 private extension BillSummaryResponse {
