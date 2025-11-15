@@ -74,6 +74,32 @@ struct WidgetRefreshService {
         return RefreshOutcome(payload: payload, loginSource: source)
     }
 
+    func fetchBillDetail(entry: BillSummaryResponse.BillEntry, manualCredentials: Credentials? = nil) async throws -> BillDetailResponse {
+        do {
+            return try await apiClient.fetchBillDetail(entry: entry)
+        } catch {
+            guard apiClient.isAuthenticationError(error) else { throw error }
+        }
+
+        if let stored = try? credentialStore.load() {
+            do {
+                return try await apiClient.fetchBillDetail(entry: entry, credentials: stored)
+            } catch {
+                if apiClient.isAuthenticationError(error) {
+                    try? credentialStore.delete()
+                } else {
+                    throw error
+                }
+            }
+        }
+
+        if let manual = manualCredentials {
+            return try await apiClient.fetchBillDetail(entry: entry, credentials: manual)
+        }
+
+        throw WidgetRefreshError.missingCredentials
+    }
+
     func clearSessionArtifacts() {
         apiClient.clearPersistedSession()
     }

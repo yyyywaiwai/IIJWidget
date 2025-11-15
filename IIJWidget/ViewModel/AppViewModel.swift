@@ -68,6 +68,13 @@ final class AppViewModel: ObservableObject {
         Task { await refresh(trigger: .manual) }
     }
 
+    func fetchBillDetail(for entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
+        return try await widgetRefreshService.fetchBillDetail(
+            entry: entry,
+            manualCredentials: credentialFieldsHidden ? nil : currentManualCredentials()
+        )
+    }
+
     func revealCredentialFields() {
         credentialFieldsHidden = false
     }
