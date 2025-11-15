@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pr-firebase-distribution-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  group: pr-firebase-distribution-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -31,7 +31,7 @@ env:
 jobs:
   build:
     name: Build IPA
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event.pull_request.draft != true }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -176,28 +176,23 @@ jobs:
 
       - name: Compose release notes
         id: release_notes
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
-          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
-          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
-          PR_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
         run: |
           set -euo pipefail
-          NOTES_PATH="$RUNNER_TEMP/release-notes.txt"
-          if [ "$EVENT_NAME" = "pull_request" ]; then
+          NOTES_PATH="$GITHUB_WORKSPACE/release-notes.txt"
+          PR_NUMBER=$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")
+          PR_TITLE=$(jq -r '.pull_request.title // empty' "$GITHUB_EVENT_PATH")
+          PR_AUTHOR=$(jq -r '.pull_request.user.login // empty' "$GITHUB_EVENT_PATH")
+          if [ -n "$PR_NUMBER" ] && [ -n "$PR_TITLE" ]; then
             {
               echo "PR #$PR_NUMBER · $PR_TITLE"
               echo "Author: $PR_AUTHOR"
-              echo "Commit: $SHA"
+              echo "Commit: $GITHUB_SHA"
             } > "$NOTES_PATH"
           else
             {
-              echo "Manual trigger on $REF"
-              echo "Actor: $ACTOR"
-              echo "Commit: $SHA"
+              echo "Manual trigger on $GITHUB_REF"
+              echo "Actor: $GITHUB_ACTOR"
+              echo "Commit: $GITHUB_SHA"
             } > "$NOTES_PATH"
           fi
           echo "path=$NOTES_PATH" >> "$GITHUB_OUTPUT"
@@ -227,13 +222,6 @@ jobs:
           RELEASE_URL: ${{ steps.firebase.outputs.FIREBASE_CONSOLE_URI }}
           DOWNLOAD_URL: ${{ steps.firebase.outputs.TESTING_URI }}
           BINARY_URL: ${{ steps.firebase.outputs.BINARY_DOWNLOAD_URI }}
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
-          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
-          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
-          PR_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK_URL" ]; then
@@ -251,11 +239,14 @@ jobs:
             echo 'Firebase action did not return a release link' >&2
             exit 1
           fi
-          if [ "$EVENT_NAME" = "pull_request" ]; then
+          PR_NUMBER=$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")
+          PR_TITLE=$(jq -r '.pull_request.title // empty' "$GITHUB_EVENT_PATH")
+          PR_AUTHOR=$(jq -r '.pull_request.user.login // empty' "$GITHUB_EVENT_PATH")
+          if [ -n "$PR_NUMBER" ] && [ -n "$PR_TITLE" ]; then
             EMBED_TITLE="新しい PR ビルドが利用可能"
             EMBED_FIELDS=$(jq -n \
               --arg pr "#$PR_NUMBER · $PR_TITLE" \
-              --arg commit "$SHA" \
+              --arg commit "$GITHUB_SHA" \
               --arg author "$PR_AUTHOR" \
               '[
                 {name: "PR", value: $pr},
@@ -265,9 +256,9 @@ jobs:
           else
             EMBED_TITLE="手動トリガーのビルドが利用可能"
             EMBED_FIELDS=$(jq -n \
-              --arg ref "$REF" \
-              --arg commit "$SHA" \
-              --arg actor "$ACTOR" \
+              --arg ref "$GITHUB_REF" \
+              --arg commit "$GITHUB_SHA" \
+              --arg actor "$GITHUB_ACTOR" \
               '[
                 {name: "Ref", value: $ref},
                 {name: "Commit", value: $commit},
