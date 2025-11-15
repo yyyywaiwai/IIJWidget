@@ -137,7 +137,7 @@ jobs:
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$ARCHIVE_PATH" \
-            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
             -allowProvisioningUpdates \
             clean archive
 
