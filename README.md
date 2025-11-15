@@ -20,7 +20,7 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 ```
 
 ## 動作要件
-- macOS 14.5 以降 / Xcode 16 以降（CI では Xcode 26.1.1、Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
+- macOS 14.5 以降 / Xcode 16 以降（CI では Xcode 26.1、Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
 - iOS 17 以降の実機またはシミュレータ。
 - IIJmio の mioID（または登録メールアドレス）とパスワード
 - App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
@@ -53,7 +53,7 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 - 実機/シミュレータ動作確認: Xcode で `IIJWidget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
 
 ## CI / Firebase App Distribution
-PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.1.1 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
+PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.1 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
 
 ### 必要な GitHub Secrets
 | Secret 名 | 用途 |
@@ -86,4 +86,3 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 ## セキュリティ上の注意
 - 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。
 - 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`IIJAPIClient` のログで HTTP ステータスや `error` コードを確認してください。
-
