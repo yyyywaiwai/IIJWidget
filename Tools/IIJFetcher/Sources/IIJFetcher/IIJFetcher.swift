@@ -78,6 +78,19 @@ struct BillSummaryResponse: Codable {
     let isImt: Bool?
 }
 
+extension BillSummaryResponse {
+    var latestEntry: BillEntry? {
+        billList.max(by: { $0.monthIdentifier < $1.monthIdentifier })
+    }
+}
+
+private extension BillSummaryResponse.BillEntry {
+    var monthIdentifier: Int {
+        guard let month else { return 0 }
+        return Int(month.filter(\.isNumber)) ?? 0
+    }
+}
+
 struct BillDetailResponse: Codable {
     struct TaxBreakdown: Codable, Identifiable {
         let label: String
@@ -340,7 +353,7 @@ struct IIJFetcherCLI {
             throw CLIError(message: "指定した月 \(month) の請求データが見つかりませんでした")
         }
 
-        guard let latest = summary.billList.first else {
+        guard let latest = summary.latestEntry else {
             throw CLIError(message: "請求サマリが空です")
         }
         return latest

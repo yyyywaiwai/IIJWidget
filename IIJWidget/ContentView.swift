@@ -1580,41 +1580,55 @@ struct BillSummaryList: View {
                 .font(.headline)
 
             ForEach(entries) { entry in
-                Button {
-                    onSelect?(entry)
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.formattedMonth)
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            if entry.isUnpaid == true {
-                                Text("未払い")
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                            }
-                        }
-                        Spacer()
-                        Text(entry.formattedAmount)
-                            .font(.body.bold())
-                            .monospacedDigit()
-                            .foregroundStyle(.primary)
-                        if onSelect != nil {
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.vertical, 6)
+                row(for: entry)
 
                 if entry.id != entries.last?.id {
                     Divider()
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func row(for entry: BillSummaryResponse.BillEntry) -> some View {
+        if let onSelect {
+            Button {
+                onSelect(entry)
+            } label: {
+                rowContent(for: entry, isInteractive: true)
+            }
+            .buttonStyle(.plain)
+        } else {
+            rowContent(for: entry, isInteractive: false)
+        }
+    }
+
+    @ViewBuilder
+    private func rowContent(for entry: BillSummaryResponse.BillEntry, isInteractive: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.formattedMonth)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                if entry.isUnpaid == true {
+                    Text("未払い")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            Spacer()
+            Text(entry.formattedAmount)
+                .font(.body.bold())
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+            if isInteractive {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 6)
     }
 }
 
@@ -1716,10 +1730,13 @@ struct BillDetailSheet: View {
 
     private func loadDetail(for entry: BillSummaryResponse.BillEntry) async {
         loadState = .loading
+        let targetId = entry.id
         do {
             let detail = try await viewModel.fetchBillDetail(for: entry)
+            guard targetId == selectedEntry.id else { return }
             loadState = .loaded(detail)
         } catch {
+            guard targetId == selectedEntry.id else { return }
             loadState = .failed(error.localizedDescription)
         }
     }
