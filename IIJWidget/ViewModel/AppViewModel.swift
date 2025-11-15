@@ -7,9 +7,9 @@ import WidgetKit
 final class AppViewModel: ObservableObject {
     enum LoadState {
         case idle
-        case loading
+        case loading(previous: AggregatePayload?)
         case loaded(AggregatePayload)
-        case failed(String)
+        case failed(String, lastPayload: AggregatePayload?)
     }
 
     enum RefreshTrigger {
@@ -26,8 +26,9 @@ final class AppViewModel: ObservableObject {
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
+    private let payloadStore = AggregatePayloadStore()
 
-    private var isRefreshing = false
+    private var refreshTaskInFlight = false
     private var lastAutomaticRefresh: Date?
 
     init() {
@@ -36,6 +37,10 @@ final class AppViewModel: ObservableObject {
             password = saved.password
             credentialFieldsHidden = true
             hasStoredCredentials = true
+        }
+
+        if let cachedPayload = payloadStore.load() {
+            state = .loaded(cachedPayload)
         }
     }
 
@@ -55,7 +60,7 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    func triggerAutomaticRefreshIfNeeded(throttle seconds: TimeInterval = 60) async {
+    func triggerAutomaticRefreshIfNeeded(throttle seconds: TimeInterval = 10 * 60) async {
         let now = Date()
         if let last = lastAutomaticRefresh, now.timeIntervalSince(last) < seconds {
             return
@@ -91,10 +96,11 @@ final class AppViewModel: ObservableObject {
     }
 
     private func refresh(trigger: RefreshTrigger) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        state = .loading
-        defer { isRefreshing = false }
+        guard !refreshTaskInFlight else { return }
+        refreshTaskInFlight = true
+        let previousPayload = currentPayload()
+        state = .loading(previous: previousPayload)
+        defer { refreshTaskInFlight = false }
 
         do {
             let outcome = try await widgetRefreshService.refresh(
@@ -108,7 +114,7 @@ final class AppViewModel: ObservableObject {
             lastLoginSource = outcome.loginSource
             handleCredentialVisibility(after: outcome.loginSource)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(error.localizedDescription, lastPayload: previousPayload)
         }
     }
 
@@ -116,6 +122,19 @@ final class AppViewModel: ObservableObject {
         let trimmedId = mioId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedId.isEmpty, !password.isEmpty else { return nil }
         return Credentials(mioId: trimmedId, password: password)
+    }
+
+    private func currentPayload() -> AggregatePayload? {
+        switch state {
+        case .loaded(let payload):
+            return payload
+        case .loading(let previous):
+            return previous
+        case .failed(_, let last):
+            return last
+        case .idle:
+            return nil
+        }
     }
 
     private func handleCredentialVisibility(after source: WidgetRefreshService.LoginSource) {

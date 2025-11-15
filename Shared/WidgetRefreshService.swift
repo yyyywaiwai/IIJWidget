@@ -26,6 +26,7 @@ struct WidgetRefreshService {
     private let credentialStore = CredentialStore()
     private let apiClient = IIJAPIClient()
     private let widgetDataStore = WidgetDataStore()
+    private let payloadStore = AggregatePayloadStore()
 
     func refresh(
         manualCredentials: Credentials? = nil,
@@ -65,6 +66,7 @@ struct WidgetRefreshService {
     }
 
     private func finalize(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
+        payloadStore.save(payload: payload)
         if var snapshot = WidgetSnapshot(payload: payload) {
             if widgetDataStore.loadSnapshot()?.isRefreshing == true {
                 snapshot = snapshot.updatingRefreshingState(true)
@@ -102,5 +104,6 @@ struct WidgetRefreshService {
 
     func clearSessionArtifacts() {
         apiClient.clearPersistedSession()
+        payloadStore.clear()
     }
 }

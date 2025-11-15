@@ -130,10 +130,16 @@ struct ContentView: View {
     }
 
     private var loadedPayload: AggregatePayload? {
-        if case let .loaded(payload) = viewModel.state {
+        switch viewModel.state {
+        case .loaded(let payload):
             return payload
+        case .loading(let previous):
+            return previous
+        case .failed(_, let last):
+            return last
+        case .idle:
+            return nil
         }
-        return nil
     }
 
     private var isLoading: Bool {
@@ -1253,7 +1259,7 @@ struct StateFeedbackBanner: View {
 
     @ViewBuilder
     var body: some View {
-        if case .failed(let message) = state {
+        if case .failed(let message, _) = state {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                 Text(message)

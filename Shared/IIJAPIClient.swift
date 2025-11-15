@@ -39,6 +39,7 @@ final class IIJAPIClient {
         config.waitsForConnectivity = true
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
+        config.httpMaximumConnectionsPerHost = 12
         let storage = HTTPCookieStorage.sharedCookieStorage(forGroupContainerIdentifier: AppGroup.identifier)
         cookieStorage = storage
         config.httpCookieStorage = storage
@@ -135,27 +136,42 @@ final class IIJAPIClient {
         let landing = landingParser.extractLandingPageForms()
         guard !landing.forms.isEmpty else { return [] }
 
-        var services: [MonthlyUsageService] = []
-        for form in landing.forms {
-            guard let body = formURLEncoded([
-                "hdoCode": form.hdoCode,
-                "_csrf": form.csrfToken
-            ]) else { continue }
+        let forms = landing.forms
+        let servicesByCode = try await withThrowingTaskGroup(of: (String, MonthlyUsageService?).self) { group in
+            for form in forms {
+                group.addTask {
+                    guard let body = self.formURLEncoded([
+                        "hdoCode": form.hdoCode,
+                        "_csrf": form.csrfToken
+                    ]) else {
+                        return (form.hdoCode, nil)
+                    }
 
-            let response = try await request(
-                path: "/service/setup/hdc/viewmonthlydata/",
-                method: "POST",
-                body: body,
-                contentType: "application/x-www-form-urlencoded"
-            )
-            guard let detailHTML = String(data: response, encoding: .utf8) else { continue }
-            let detailParser = DataUsageHTMLParser(html: detailHTML)
-            if let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode) {
-                services.append(service)
+                    let response = try await self.request(
+                        path: "/service/setup/hdc/viewmonthlydata/",
+                        method: "POST",
+                        body: body,
+                        contentType: "application/x-www-form-urlencoded"
+                    )
+                    guard let detailHTML = String(data: response, encoding: .utf8) else {
+                        return (form.hdoCode, nil)
+                    }
+                    let detailParser = DataUsageHTMLParser(html: detailHTML)
+                    let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode)
+                    return (form.hdoCode, service)
+                }
             }
+
+            var collected: [String: MonthlyUsageService] = [:]
+            for try await (code, service) in group {
+                if let service {
+                    collected[code] = service
+                }
+            }
+            return collected
         }
 
-        return services
+        return forms.compactMap { servicesByCode[$0.hdoCode] }
     }
 
     private func fetchDailyUsage() async throws -> [DailyUsageService] {
@@ -169,23 +185,34 @@ final class IIJAPIClient {
         let previewServices = landingParser.previewDailyServices(for: landing.forms)
         guard !landing.forms.isEmpty else { return [] }
 
-        var services: [DailyUsageService] = []
+        let forms = landing.forms
+        let servicesByCode = try await withThrowingTaskGroup(of: (String, DailyUsageService?).self) { group in
+            for form in forms {
+                group.addTask {
+                    guard let detailHTML = try await self.requestDailyDetailHTML(hdoCode: form.hdoCode, csrfToken: form.csrfToken) else {
+                        return (form.hdoCode, nil)
+                    }
 
-        for form in landing.forms {
-            guard let detailHTML = try await requestDailyDetailHTML(hdoCode: form.hdoCode, csrfToken: form.csrfToken) else {
-                continue
+                    let detailParser = DataUsageHTMLParser(html: detailHTML)
+                    guard let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode) else {
+                        return (form.hdoCode, nil)
+                    }
+
+                    let merged = self.mergeDailyServices(primary: baseService, overlay: previewServices[form.hdoCode])
+                    return (form.hdoCode, merged)
+                }
             }
 
-            let detailParser = DataUsageHTMLParser(html: detailHTML)
-            guard let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode) else {
-                continue
+            var collected: [String: DailyUsageService] = [:]
+            for try await (code, service) in group {
+                if let service {
+                    collected[code] = service
+                }
             }
-
-            let merged = mergeDailyServices(primary: baseService, overlay: previewServices[form.hdoCode])
-            services.append(merged)
+            return collected
         }
 
-        return services
+        return forms.compactMap { servicesByCode[$0.hdoCode] }
     }
 
     private func requestDailyDetailHTML(hdoCode: String, csrfToken: String) async throws -> String? {
