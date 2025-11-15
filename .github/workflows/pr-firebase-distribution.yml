@@ -102,6 +102,152 @@ jobs:
             echo "ASC_ISSUER_ID=$ASC_API_KEY_ISSUER_ID"
           } >> "$GITHUB_ENV"
 
+      - name: Revoke stale distribution certificates
+        env:
+          ASC_KEY_PATH: ${{ env.ASC_KEY_PATH }}
+          ASC_KEY_ID: ${{ env.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ env.ASC_ISSUER_ID }}
+          ASC_PROTECTED_CERT_SERIALS: ${{ secrets.ASC_PROTECTED_CERT_SERIALS }}
+          ASC_PROTECTED_CERT_NAMES: ${{ secrets.ASC_PROTECTED_CERT_NAMES }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ASC_KEY_PATH" ] || [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ]; then
+            echo 'App Store Connect API key configuration is missing' >&2
+            exit 1
+          fi
+          pip3 install --disable-pip-version-check --no-cache-dir 'pyjwt[crypto]' >/dev/null
+          python3 <<'PY'
+import datetime
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    import jwt  # type: ignore
+except ModuleNotFoundError as exc:  # pragma: no cover
+    raise SystemExit(f"Failed to import pyjwt: {exc}")
+
+ASC_KEY_PATH = os.environ['ASC_KEY_PATH']
+ASC_KEY_ID = os.environ['ASC_KEY_ID']
+ASC_ISSUER_ID = os.environ['ASC_ISSUER_ID']
+API_BASE = 'https://api.appstoreconnect.apple.com'
+CERTIFICATE_LIMIT = 3
+CERTIFICATES_TO_KEEP = 2
+
+
+def parse_protected(value: str) -> list[str]:
+    value = value.strip()
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        items = value.replace('\n', ',').split(',')
+        return [item.strip() for item in items if item.strip()]
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    if isinstance(parsed, str):
+        return [parsed.strip()] if parsed.strip() else []
+    raise SystemExit('ASC_PROTECTED_CERT_* must be JSON array, string, or comma/newline separated list')
+
+
+PROTECTED_SERIALS = set(parse_protected(os.environ.get('ASC_PROTECTED_CERT_SERIALS', '')))
+PROTECTED_NAMES = set(parse_protected(os.environ.get('ASC_PROTECTED_CERT_NAMES', '')))
+
+with open(ASC_KEY_PATH, 'r', encoding='utf-8') as fh:
+    private_key = fh.read()
+
+payload = {
+    'iss': ASC_ISSUER_ID,
+    'exp': int(time.time()) + 600,
+    'aud': 'appstoreconnect-v1',
+}
+
+token = jwt.encode(payload, private_key, algorithm='ES256', headers={'kid': ASC_KEY_ID})
+
+def request(method: str, path: str, *, data: dict | None = None) -> dict | None:
+    url = urllib.parse.urljoin(API_BASE, path)
+    req = urllib.request.Request(url, method=method)
+    req.add_header('Authorization', f'Bearer {token}')
+    if data is not None:
+        body = json.dumps(data).encode('utf-8')
+        req.add_header('Content-Type', 'application/json')
+        req.data = body
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status == 204:
+                return None
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as error:  # pragma: no cover - surfaced to workflow log
+        message = error.read().decode('utf-8', errors='ignore')
+        raise SystemExit(f'App Store Connect API request failed ({error.code}): {message}')
+
+
+response = request('GET', '/v1/certificates?filter[type]=IOS_DISTRIBUTION&fields[certificates]=name,serialNumber,expirationDate,certificateType,dateCreated')
+if response is None:
+    sys.exit(0)
+
+certificates = response.get('data', [])
+distribution = [c for c in certificates if c.get('attributes', {}).get('certificateType') == 'IOS_DISTRIBUTION']
+
+if len(distribution) < CERTIFICATE_LIMIT:
+    print('Distribution certificate count below limit; no revocation necessary.')
+    sys.exit(0)
+
+def sort_key(item: dict) -> tuple[datetime.datetime, str]:
+    created_at = item.get('attributes', {}).get('dateCreated', '')
+    serial = item.get('attributes', {}).get('serialNumber', '')
+    try:
+        timestamp = datetime.datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+    except ValueError:
+        timestamp = datetime.datetime.min
+    return (timestamp, serial)
+
+distribution.sort(key=sort_key)
+candidates: list[dict] = []
+protected_seen = 0
+
+for certificate in distribution:
+    attributes = certificate.get('attributes', {})
+    name = attributes.get('name', '')
+    serial = attributes.get('serialNumber', '')
+    if serial in PROTECTED_SERIALS or name in PROTECTED_NAMES:
+        protected_seen += 1
+        print(f"Skipping protected certificate '{name or 'unknown'}' (serial {serial or 'unknown'}).")
+        continue
+    candidates.append(certificate)
+
+excess = max(0, len(distribution) - CERTIFICATES_TO_KEEP)
+
+if excess == 0:
+    print('Certificate count already within retention limit; nothing to revoke.')
+    sys.exit(0)
+
+if not candidates:
+    raise SystemExit('Certificate limit exceeded but no revocable certificates remain after applying protection rules.')
+
+to_revoke = candidates[:excess]
+
+if len(to_revoke) < excess:
+    raise SystemExit('Certificate limit exceeded and protected certificates prevent automatic cleanup. Please revoke manually.')
+
+for certificate in to_revoke:
+    cert_id = certificate['id']
+    attributes = certificate.get('attributes', {})
+    name = attributes.get('name', 'unknown')
+    serial = attributes.get('serialNumber', 'unknown')
+    expiration = attributes.get('expirationDate', 'unknown')
+    request('DELETE', f'/v1/certificates/{cert_id}')
+    print(f"Revoked certificate '{name}' (serial {serial}, expires {expiration}).")
+
+remaining = len(distribution) - len(to_revoke)
+print(f'Remaining distribution certificates after cleanup: {remaining} (protected: {protected_seen}).')
+PY
+
       - name: Archive IIJWidget
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
