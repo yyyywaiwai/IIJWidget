@@ -22,7 +22,9 @@ env:
   PROJECT: IIJWidget.xcodeproj
   SCHEME: IIJWidget
   BUNDLE_ID: jp.yyyywaiwai.IIJWidget
+  WIDGET_BUNDLE_ID: jp.yyyywaiwai.IIJWidget.RemainingDataWidget
   EXPORT_METHOD: development
+  CODE_SIGN_IDENTITY: Apple Distribution
 
 jobs:
   distribute:
@@ -66,6 +68,7 @@ jobs:
           P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12 }}
           P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          WIDGET_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_WIDGET }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
@@ -73,7 +76,7 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          if [ -z "$P12_BASE64" ] || [ -z "$PROFILE_BASE64" ]; then
+          if [ -z "$P12_BASE64" ] || [ -z "$PROFILE_BASE64" ] || [ -z "$WIDGET_PROFILE_BASE64" ]; then
             echo 'Signing secrets are missing' >&2
             exit 1
           fi
@@ -87,16 +90,24 @@ jobs:
           echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
           PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
           PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")")
+          WIDGET_PROFILE_PATH="$RUNNER_TEMP/widget.mobileprovision"
+          echo "$WIDGET_PROFILE_BASE64" | base64 --decode > "$WIDGET_PROFILE_PATH"
+          WIDGET_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$WIDGET_PROFILE_PATH")")
+          WIDGET_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i "$WIDGET_PROFILE_PATH")")
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          cp "$WIDGET_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$WIDGET_PROFILE_UUID.mobileprovision"
           echo "profile-uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
           echo "profile-name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "widget-profile-uuid=$WIDGET_PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "widget-profile-name=$WIDGET_PROFILE_NAME" >> "$GITHUB_OUTPUT"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Create export options
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
+          WIDGET_PROFILE_NAME: ${{ steps.signing.outputs.widget-profile-name }}
         run: |
           set -euo pipefail
           EXPORT_OPTIONS_PLIST="$RUNNER_TEMP/exportOptions.plist"
@@ -123,6 +134,8 @@ jobs:
               <dict>
                 <key>$BUNDLE_ID</key>
                 <string>$PROFILE_NAME</string>
+                <key>$WIDGET_BUNDLE_ID</key>
+                <string>$WIDGET_PROFILE_NAME</string>
               </dict>
             </dict>
           </plist>
@@ -133,6 +146,7 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
+          WIDGET_PROFILE_NAME: ${{ steps.signing.outputs.widget-profile-name }}
         run: |
           set -o pipefail
           xcodebuild \
@@ -145,8 +159,10 @@ jobs:
             DEVELOPMENT_TEAM_RemainingDataWidget="$TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_STYLE_RemainingDataWidget=Manual \
+            CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+            CODE_SIGN_IDENTITY_RemainingDataWidget="$CODE_SIGN_IDENTITY" \
             "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" \
-            "PROVISIONING_PROFILE_SPECIFIER_RemainingDataWidget=$PROFILE_NAME" \
+            "PROVISIONING_PROFILE_SPECIFIER_RemainingDataWidget=$WIDGET_PROFILE_NAME" \
             -allowProvisioningUpdates \
             clean archive
 
