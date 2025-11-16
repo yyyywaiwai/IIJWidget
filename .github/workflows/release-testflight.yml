@@ -1,0 +1,242 @@
+name: Release TestFlight
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-testflight-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: IIJWidget.xcodeproj
+  SCHEME: IIJWidget
+  EXPORT_METHOD: app-store
+  CODE_SIGN_STYLE: automatic
+  CODE_SIGN_IDENTITY: Apple Distribution
+
+jobs:
+  build-and-upload:
+    name: Build & Upload to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare build paths
+        run: |
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/IIJWidget.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
+
+      - name: Select Xcode 26.0
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -project "$PROJECT" -scheme "$SCHEME" -resolvePackageDependencies
+
+      - name: Extract version information
+        id: version
+        run: |
+          set -euo pipefail
+          SETTINGS_FILE="$(mktemp)"
+          trap 'rm -f "$SETTINGS_FILE"' EXIT
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release -showBuildSettings > "$SETTINGS_FILE"
+          INFO_PLIST=$(grep -m1 'INFOPLIST_FILE' "$SETTINGS_FILE" | sed 's/^[[:space:]]*INFOPLIST_FILE[[:space:]]*=[[:space:]]*//')
+          if [ -z "$INFO_PLIST" ]; then
+            echo 'Unable to determine Info.plist path' >&2
+            exit 1
+          fi
+          case "$INFO_PLIST" in
+            /*) ;;
+            *) INFO_PLIST="$GITHUB_WORKSPACE/$INFO_PLIST" ;;
+          esac
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")
+          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")
+          {
+            echo "path=$INFO_PLIST"
+            echo "version=$APP_VERSION"
+            echo "build=$BUILD_NUMBER"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create export options
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TEAM_ID" ]; then
+            echo 'APPLE_TEAM_ID secret is missing' >&2
+            exit 1
+          fi
+          EXPORT_OPTIONS_PLIST="$RUNNER_TEMP/exportOptions.plist"
+          cat <<EOF2 > "$EXPORT_OPTIONS_PLIST"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>compileBitcode</key>
+              <false/>
+              <key>destination</key>
+              <string>export</string>
+              <key>method</key>
+              <string>$EXPORT_METHOD</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+              <key>signingStyle</key>
+              <string>$CODE_SIGN_STYLE</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>uploadSymbols</key>
+              <true/>
+            </dict>
+          </plist>
+          EOF2
+          echo "EXPORT_OPTIONS_PLIST=$EXPORT_OPTIONS_PLIST" >> "$GITHUB_ENV"
+
+      - name: Prepare App Store Connect API key
+        id: asc_key
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ASC_API_KEY_P8" ] || [ -z "$ASC_API_KEY_ID" ] || [ -z "$ASC_API_KEY_ISSUER_ID" ]; then
+            echo 'App Store Connect API key secrets are missing' >&2
+            exit 1
+          fi
+          ASC_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_API_KEY_P8" | base64 --decode > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          KEY_CONTENT=$(cat "$ASC_KEY_PATH")
+          echo "::add-mask::$KEY_CONTENT"
+          {
+            echo "ASC_KEY_PATH=$ASC_KEY_PATH"
+            echo "ASC_KEY_ID=$ASC_API_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_API_KEY_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+          {
+            echo "key_id=$ASC_API_KEY_ID"
+            echo "issuer_id=$ASC_API_KEY_ISSUER_ID"
+            echo "key<<EOF"
+            printf '%s\n' "$KEY_CONTENT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Archive IIJWidget
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            clean archive
+
+      - name: Export IPA
+        run: |
+          set -o pipefail
+          mkdir -p "$EXPORT_PATH"
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
+            -exportPath "$EXPORT_PATH"
+
+      - name: Locate IPA
+        id: ipa
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(find "$EXPORT_PATH" -maxdepth 2 -type f -name '*.ipa' | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo 'Exported IPA not found' >&2
+            exit 1
+          fi
+          echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-ipa
+          path: ${{ steps.ipa.outputs.path }}
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          issuer-id: ${{ steps.asc_key.outputs.issuer_id }}
+          api-key-id: ${{ steps.asc_key.outputs.key_id }}
+          api-private-key: ${{ steps.asc_key.outputs.key }}
+
+      - name: Notify Discord
+        if: ${{ success() }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TESTFLIGHT_PUBLIC_LINK: ${{ secrets.TESTFLIGHT_PUBLIC_LINK }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo 'Discord webhook URL is not configured' >&2
+            exit 1
+          fi
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          COMMIT_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+          COMMIT_SHORT=${GITHUB_SHA:0:7}
+           VERSION="${{ steps.version.outputs.version }}"
+           BUILD="${{ steps.version.outputs.build }}"
+          if [ -z "$VERSION" ] || [ -z "$BUILD" ]; then
+            echo 'Version metadata is missing' >&2
+            exit 1
+          fi
+          if [ -n "$TESTFLIGHT_PUBLIC_LINK" ]; then
+            TF_VALUE="[Open TestFlight]($TESTFLIGHT_PUBLIC_LINK)"
+          else
+            TF_VALUE="公開リンク未設定（secrets.TESTFLIGHT_PUBLIC_LINK に共有URLを設定してください）"
+          fi
+          TITLE="TestFlight リリースがアップロードされました"
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg commit "$COMMIT_SHORT" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg run "$RUN_URL" \
+            --arg commitUrl "$COMMIT_URL" \
+            --arg version "$VERSION" \
+            --arg build "$BUILD" \
+            --arg tf "$TF_VALUE" \
+            '{
+              embeds: [
+                {
+                  title: $title,
+                  description: "[Actions Run](\($run)) · [Commit](\($commitUrl))",
+                  color: 3447003,
+                  fields: [
+                    {name: "Branch", value: $branch, inline: true},
+                    {name: "Actor", value: $actor, inline: true},
+                    {name: "Commit", value: $commit, inline: true},
+                    {name: "Version", value: $version, inline: true},
+                    {name: "Build", value: $build, inline: true},
+                    {name: "TestFlight", value: $tf, inline: false}
+                  ],
+                  footer: {text: "App Store Connect / TestFlight"}
+                }
+              ]
+            }')
+          curl -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL"
