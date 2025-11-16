@@ -74,13 +74,28 @@ jobs:
               BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" 2>/dev/null || true)
             fi
           fi
-          if [ -z "$APP_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
-            echo 'Unable to read MARKETING_VERSION / CURRENT_PROJECT_VERSION or fallback Info.plist values' >&2
-            exit 1
+          if [ -z "$APP_VERSION" ]; then
+            APP_VERSION="1.0"
           fi
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=1
+          fi
+          RUN_NUMBER="${GITHUB_RUN_NUMBER:-1}"
+          if ! [[ "$RUN_NUMBER" =~ ^[0-9]+$ ]] || [ "$RUN_NUMBER" -lt 1 ]; then
+            RUN_NUMBER=1
+          fi
+          if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            BUILD_NUMBER=1
+          fi
+          NEW_BUILD_NUMBER=$((BUILD_NUMBER + RUN_NUMBER))
+          NEW_MARKETING_VERSION="${APP_VERSION}.${RUN_NUMBER}"
           {
-            echo "version=$APP_VERSION"
-            echo "build=$BUILD_NUMBER"
+            echo "MARKETING_VERSION_OVERRIDE=$NEW_MARKETING_VERSION"
+            echo "BUILD_NUMBER_OVERRIDE=$NEW_BUILD_NUMBER"
+          } >> "$GITHUB_ENV"
+          {
+            echo "version=$NEW_MARKETING_VERSION"
+            echo "build=$NEW_BUILD_NUMBER"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create export options
@@ -164,6 +179,8 @@ jobs:
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            MARKETING_VERSION="$MARKETING_VERSION_OVERRIDE" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER_OVERRIDE" \
             clean archive
 
       - name: Export IPA
