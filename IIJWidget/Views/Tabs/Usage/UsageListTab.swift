@@ -61,9 +61,6 @@ struct MonthlyUsageSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("月別データ利用量")
-                .font(.headline)
-
             ForEach(services) { service in
                 MonthlyUsageServiceCard(service: service)
             }
@@ -124,9 +121,6 @@ struct DailyUsageSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("日別データ利用量")
-                .font(.headline)
-
             ForEach(services) { service in
                 DailyUsageServiceCard(service: service)
             }
@@ -187,8 +181,6 @@ struct ServiceStatusList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("回線ステータス")
-                .font(.headline)
             ForEach(status.serviceInfoList) { item in
                 VStack(alignment: .leading, spacing: 4) {
                     Text("プレフィックス: \(item.serviceCodePrefix ?? "-")")

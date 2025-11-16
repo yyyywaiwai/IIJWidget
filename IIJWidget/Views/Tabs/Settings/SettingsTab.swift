@@ -25,8 +25,10 @@ struct SettingsTab: View {
             }
 
             Section(header: Text("プロジェクト")) {
-                Link(destination: repositoryURL) {
-                    Label("GitHub リポジトリを開く", systemImage: "arrow.up.right.square")
+                if let repositoryURL {
+                    Link(destination: repositoryURL) {
+                        Label("GitHub リポジトリを開く", systemImage: "arrow.up.right.square")
+                    }
                 }
             }
 
@@ -86,7 +88,7 @@ struct SettingsTab: View {
     }
 }
 
-private let repositoryURL = URL(string: "https://github.com/yyyywaiwai/IIJWidget")!
+private let repositoryURL = URL(string: "https://github.com/yyyywaiwai/IIJWidget")
 
 struct CredentialsCard: View {
     @ObservedObject var viewModel: AppViewModel

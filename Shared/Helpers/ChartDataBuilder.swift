@@ -21,6 +21,16 @@ struct UsageChartPoint: Identifiable, Equatable {
     }
 }
 
+extension UsageChartPoint {
+    static func == (lhs: UsageChartPoint, rhs: UsageChartPoint) -> Bool {
+        lhs.displayLabel == rhs.displayLabel &&
+        lhs.rawKey == rhs.rawKey &&
+        lhs.value == rhs.value &&
+        lhs.sortKey == rhs.sortKey &&
+        lhs.date == rhs.date
+    }
+}
+
 struct BillChartPoint: Identifiable {
     let id: String
     let label: String

@@ -196,7 +196,7 @@ struct OnboardingCredentialSetupStep: View {
                     .disabled(!viewModel.canSubmit)
                 }
 
-                Text("ログアウトすると再度この画面は表示されませんが、設定タブからいつでも資格情報を更新できます。")
+                Text("ログインを行うと再度この画面は表示されませんが、設定タブからいつでも資格情報を更新できます。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
