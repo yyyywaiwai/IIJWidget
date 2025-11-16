@@ -88,13 +88,12 @@ jobs:
             BUILD_NUMBER=1
           fi
           NEW_BUILD_NUMBER=$((BUILD_NUMBER + RUN_NUMBER))
-          NEW_MARKETING_VERSION="${APP_VERSION}.${RUN_NUMBER}"
           {
-            echo "MARKETING_VERSION_OVERRIDE=$NEW_MARKETING_VERSION"
+            echo "MARKETING_VERSION_OVERRIDE=$APP_VERSION"
             echo "BUILD_NUMBER_OVERRIDE=$NEW_BUILD_NUMBER"
           } >> "$GITHUB_ENV"
           {
-            echo "version=$NEW_MARKETING_VERSION"
+            echo "version=$APP_VERSION"
             echo "build=$NEW_BUILD_NUMBER"
           } >> "$GITHUB_OUTPUT"
 
