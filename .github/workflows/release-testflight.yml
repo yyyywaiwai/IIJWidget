@@ -51,19 +51,34 @@ jobs:
           SETTINGS_FILE="$(mktemp)"
           trap 'rm -f "$SETTINGS_FILE"' EXIT
           xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release -showBuildSettings > "$SETTINGS_FILE"
-          INFO_PLIST=$(grep -m1 'INFOPLIST_FILE' "$SETTINGS_FILE" | sed 's/^[[:space:]]*INFOPLIST_FILE[[:space:]]*=[[:space:]]*//')
-          if [ -z "$INFO_PLIST" ]; then
-            echo 'Unable to determine Info.plist path' >&2
+          get_setting () {
+            local key="$1"
+            awk -F ' = ' -v target="$key" '$1 ~ ("^[[:space:]]*" target "[[:space:]]*$") {gsub(/"/,"",$2); print $2; exit}' "$SETTINGS_FILE"
+          }
+          APP_VERSION="$(get_setting MARKETING_VERSION || true)"
+          BUILD_NUMBER="$(get_setting CURRENT_PROJECT_VERSION || true)"
+          if [ -z "$APP_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
+            INFO_PLIST=$(grep -m1 'INFOPLIST_FILE' "$SETTINGS_FILE" | sed 's/^[[:space:]]*INFOPLIST_FILE[[:space:]]*=[[:space:]]*//')
+            if [ -z "$INFO_PLIST" ]; then
+              echo 'Unable to determine Info.plist path and version keys are missing' >&2
+              exit 1
+            fi
+            case "$INFO_PLIST" in
+              /*) ;;
+              *) INFO_PLIST="$GITHUB_WORKSPACE/$INFO_PLIST" ;;
+            esac
+            if [ -z "$APP_VERSION" ]; then
+              APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST" 2>/dev/null || true)
+            fi
+            if [ -z "$BUILD_NUMBER" ]; then
+              BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" 2>/dev/null || true)
+            fi
+          fi
+          if [ -z "$APP_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
+            echo 'Unable to read MARKETING_VERSION / CURRENT_PROJECT_VERSION or fallback Info.plist values' >&2
             exit 1
           fi
-          case "$INFO_PLIST" in
-            /*) ;;
-            *) INFO_PLIST="$GITHUB_WORKSPACE/$INFO_PLIST" ;;
-          esac
-          APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")
-          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")
           {
-            echo "path=$INFO_PLIST"
             echo "version=$APP_VERSION"
             echo "build=$BUILD_NUMBER"
           } >> "$GITHUB_OUTPUT"
