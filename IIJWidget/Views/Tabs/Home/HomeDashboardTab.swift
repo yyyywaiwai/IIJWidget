@@ -2,6 +2,9 @@ import SwiftUI
 
 struct HomeDashboardTab: View {
     let payload: AggregatePayload?
+    let accentColors: AccentColorSettings
+    let defaultUsageChart: UsageChartDefault
+    let saveDefaultUsageChart: (UsageChartDefault) -> Void
     private let columns = [GridItem(.adaptive(minimum: 320), spacing: 16)]
 
     var body: some View {
@@ -11,13 +14,17 @@ struct HomeDashboardTab: View {
                     VStack(alignment: .leading, spacing: 20) {
                         HomeOverviewHeader(
                             serviceInfoList: payload.top.serviceInfoList,
-                            latestBillAmount: payload.bill.latestEntry?.plainAmountText
+                            latestBillAmount: payload.bill.latestEntry?.plainAmountText,
+                            accentColors: accentColors
                         )
 
                         LazyVGrid(columns: columns, spacing: 16) {
                             UsageChartSwitcher(
                                 monthlyServices: payload.monthlyUsage,
-                                dailyServices: payload.dailyUsage
+                                dailyServices: payload.dailyUsage,
+                                accentColors: accentColors,
+                                defaultChart: defaultUsageChart,
+                                onDefaultChange: saveDefaultUsageChart
                             )
                         }
                     }
@@ -51,8 +58,26 @@ struct UsageChartSwitcher: View {
 
     let monthlyServices: [MonthlyUsageService]
     let dailyServices: [DailyUsageService]
+    let accentColors: AccentColorSettings
+    let defaultChart: UsageChartDefault
+    let onDefaultChange: (UsageChartDefault) -> Void
 
-    @State private var selection: Tab = .monthly
+    @State private var selection: Tab
+
+    init(
+        monthlyServices: [MonthlyUsageService],
+        dailyServices: [DailyUsageService],
+        accentColors: AccentColorSettings,
+        defaultChart: UsageChartDefault,
+        onDefaultChange: @escaping (UsageChartDefault) -> Void
+    ) {
+        self.monthlyServices = monthlyServices
+        self.dailyServices = dailyServices
+        self.accentColors = accentColors
+        self.defaultChart = defaultChart
+        self.onDefaultChange = onDefaultChange
+        _selection = State(initialValue: Tab(rawValue: defaultChart.rawValue) ?? .monthly)
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -62,14 +87,17 @@ struct UsageChartSwitcher: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: selection) { newValue in
+                onDefaultChange(UsageChartDefault(rawValue: newValue.rawValue) ?? .monthly)
+            }
 
             ZStack {
-                MonthlyUsageChartCard(services: monthlyServices)
+                MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors)
                     .opacity(selection == .monthly ? 1 : 0)
                     .allowsHitTesting(selection == .monthly)
                     .accessibilityHidden(selection != .monthly)
 
-                DailyUsageChartCard(services: dailyServices)
+                DailyUsageChartCard(services: dailyServices, accentColor: accentColors)
                     .opacity(selection == .daily ? 1 : 0)
                     .allowsHitTesting(selection == .daily)
                     .accessibilityHidden(selection != .daily)
@@ -82,6 +110,7 @@ struct UsageChartSwitcher: View {
 struct HomeOverviewHeader: View {
     let serviceInfoList: [MemberTopResponse.ServiceInfo]
     let latestBillAmount: String?
+    let accentColors: AccentColorSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -89,7 +118,11 @@ struct HomeOverviewHeader: View {
                 .font(.title3.bold())
             LazyVStack(spacing: 16) {
                 ForEach(serviceInfoList) { info in
-                    ServiceInfoCard(info: info, latestBillAmount: latestBillAmount)
+                    ServiceInfoCard(
+                        info: info,
+                        latestBillAmount: latestBillAmount,
+                        accentColors: accentColors
+                    )
                 }
             }
         }
@@ -100,36 +133,45 @@ struct HomeOverviewHeader: View {
 struct ServiceInfoCard: View {
     let info: MemberTopResponse.ServiceInfo
     let latestBillAmount: String?
+    let accentColors: AccentColorSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(info.displayPlanName)
                         .font(.headline)
                     Text("電話番号: \(info.phoneLabel)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
+
+                    if let total = info.totalCapacity {
+                        Text("プラン容量 \(total, specifier: "%.0f")GB")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if let remaining = info.remainingDataGB {
                         Text("残量 \(remaining, specifier: "%.2f")GB")
-                            .font(.headline)
+                            .font(.subheadline.weight(.semibold))
                             .monospacedDigit()
                     }
+
                     if let latestBillAmount {
                         Text(latestBillAmount)
                             .font(.headline.weight(.semibold))
                     }
                 }
-            }
 
-            if let total = info.totalCapacity {
-                ProgressView(value: progressValue(remaining: info.remainingDataGB, total: total)) {
-                    Text("プラン容量 \(total, specifier: "%.0f")GB")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+
+                if let remaining = info.remainingDataGB, let total = info.totalCapacity, total > 0 {
+                    ServiceUsageRing(
+                        remainingGB: remaining,
+                        totalCapacityGB: total,
+                        accentColors: accentColors
+                    )
+                    .frame(width: 96, height: 96)
                 }
             }
         }
@@ -137,10 +179,42 @@ struct ServiceInfoCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
     }
+}
 
-    private func progressValue(remaining: Double?, total: Double) -> Double {
-        guard let remaining else { return 0 }
-        let used = max(total - remaining, 0)
-        return min(used / total, 1)
+struct ServiceUsageRing: View {
+    let remainingGB: Double
+    let totalCapacityGB: Double
+    let accentColors: AccentColorSettings
+
+    private var remainingRatio: Double {
+        guard totalCapacityGB > 0 else { return 0 }
+        return min(max(remainingGB / totalCapacityGB, 0), 1)
+    }
+
+    private var usedRatio: Double {
+        1 - remainingRatio
+    }
+
+    var body: some View {
+        let colors = accentColors.widgetRingColors(for: remainingRatio)
+        return ZStack {
+            Circle()
+                .stroke(Color.primary.opacity(0.08), lineWidth: 12)
+            Circle()
+                .trim(from: 0, to: CGFloat(max(0.05, 1 - usedRatio)))
+                .stroke(
+                    AngularGradient(colors: colors, center: .center),
+                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 2) {
+                Text("\(remainingGB, specifier: "%.2f")GB")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                Text("残")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

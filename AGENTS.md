@@ -11,7 +11,7 @@
 - `xcodebuild -scheme IIJWidget -configuration Release`: builds the full app/widget targets; use for CI to verify compilation.
 - `swift test` (from `Tools/IIJFetcher` if expanding the package): runs SwiftPM tests for the fetcher package; expect `Package.swift` to define targets before execution.
 - Launch from Xcode (select scheme `IIJWidget` or `RemainingDataWidget`); the simulator run verifies entitlements and widget timelines in practice.
-- 作業が完了したらxcodebuild -scheme IIJWidget -configuration Debugを実行して、ビルドが通るか確認すること。
+- 作業が完了したら xcodebuild -scheme IIJWidget -configuration Debug > build.logを実行して、ビルドが通るか確認すること。
 - Codex CLI のサンドボックス環境では `xcodebuild` 実行時に権限承認が必要になるため、承認確認してから実行すること。
 
 ## Coding Style & Naming Conventions

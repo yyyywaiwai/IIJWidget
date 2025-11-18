@@ -1,4 +1,299 @@
 import Foundation
+import SwiftUI
+import UIKit
+
+enum AccentPalette: String, CaseIterable, Identifiable, Codable {
+    case ocean          // 旧 IIJブルー
+    case mint
+    case grape
+    case sunset
+    case graphite
+    case forest
+    case sakura
+    case citrus
+    case midnight
+    case sand
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .ocean:
+            return "オーシャン"
+        case .mint:
+            return "ミント"
+        case .grape:
+            return "グレープ"
+        case .sunset:
+            return "サンセット"
+        case .graphite:
+            return "グラファイト"
+        case .forest:
+            return "フォレスト"
+        case .sakura:
+            return "サクラ"
+        case .citrus:
+            return "シトラス"
+        case .midnight:
+            return "ミッドナイト"
+        case .sand:
+            return "サンド"
+        }
+    }
+
+    var chartGradient: [Color] {
+        switch self {
+        case .ocean:
+            return [
+                Color(red: 0.00, green: 0.50, blue: 0.96),
+                Color(red: 0.17, green: 0.79, blue: 0.87)
+            ]
+        case .mint:
+            return [
+                Color(red: 0.09, green: 0.66, blue: 0.64),
+                Color(red: 0.50, green: 0.90, blue: 0.83)
+            ]
+        case .grape:
+            return [
+                Color(red: 0.56, green: 0.33, blue: 0.82),
+                Color(red: 0.94, green: 0.45, blue: 0.77)
+            ]
+        case .sunset:
+            return [
+                Color(red: 0.99, green: 0.61, blue: 0.30),
+                Color(red: 0.90, green: 0.21, blue: 0.28)
+            ]
+        case .graphite:
+            return [
+                Color(dynamicGraphiteLight: UIColor(red: 0.42, green: 0.45, blue: 0.50, alpha: 1),
+                      dark: UIColor(white: 0.90, alpha: 1)),
+                Color(dynamicGraphiteLight: UIColor(red: 0.23, green: 0.26, blue: 0.30, alpha: 1),
+                      dark: UIColor(white: 0.78, alpha: 1))
+            ]
+        case .forest:
+            return [
+                Color(red: 0.16, green: 0.56, blue: 0.35),
+                Color(red: 0.39, green: 0.77, blue: 0.48)
+            ]
+        case .sakura:
+            return [
+                Color(red: 0.97, green: 0.72, blue: 0.83),
+                Color(red: 0.83, green: 0.54, blue: 0.91)
+            ]
+        case .citrus:
+            return [
+                Color(red: 0.98, green: 0.82, blue: 0.31),
+                Color(red: 0.99, green: 0.55, blue: 0.21)
+            ]
+        case .midnight:
+            return [
+                Color(red: 0.13, green: 0.22, blue: 0.44),
+                Color(red: 0.32, green: 0.46, blue: 0.78)
+            ]
+        case .sand:
+            return [
+                Color(red: 0.94, green: 0.86, blue: 0.70),
+                Color(red: 0.92, green: 0.74, blue: 0.48)
+            ]
+        }
+    }
+
+    var widgetRingGradient: [Color] {
+        chartGradient.map { $0.opacity(0.98) }
+    }
+
+    var secondaryChartGradient: [Color] {
+        chartGradient.reversed().map { $0.opacity(0.94) }
+    }
+
+    var previewSymbolColor: Color {
+        chartGradient.last ?? .accentColor
+    }
+}
+
+enum AccentRole: CaseIterable {
+    case monthlyChart
+    case dailyChart
+    case billingChart
+    case widgetRingNormal
+    case widgetRingWarning50
+    case widgetRingWarning20
+}
+
+enum UsageChartDefault: String, Codable {
+    case monthly
+    case daily
+}
+
+struct AccentColorSettings: Codable, Equatable {
+    private enum CodingKeys: String, CodingKey {
+        case monthlyChart
+        case dailyChart
+        case billingChart
+        case widgetRingNormal
+        case widgetRingWarning50
+        case widgetRingWarning20
+    }
+
+    var monthlyChart: AccentPalette
+    var dailyChart: AccentPalette
+    var billingChart: AccentPalette
+    var widgetRingNormal: AccentPalette
+    var widgetRingWarning50: AccentPalette
+    var widgetRingWarning20: AccentPalette
+
+    static let `default` = AccentColorSettings(
+        monthlyChart: .ocean,
+        dailyChart: .sakura,
+        billingChart: .ocean,
+        widgetRingNormal: .forest,
+        widgetRingWarning50: .citrus,
+        widgetRingWarning20: .sunset
+    )
+
+    init(
+        monthlyChart: AccentPalette,
+        dailyChart: AccentPalette,
+        billingChart: AccentPalette,
+        widgetRingNormal: AccentPalette,
+        widgetRingWarning50: AccentPalette,
+        widgetRingWarning20: AccentPalette
+    ) {
+        self.monthlyChart = monthlyChart
+        self.dailyChart = dailyChart
+        self.billingChart = billingChart
+        self.widgetRingNormal = widgetRingNormal
+        self.widgetRingWarning50 = widgetRingWarning50
+        self.widgetRingWarning20 = widgetRingWarning20
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        monthlyChart = try container.decode(AccentPalette.self, forKey: .monthlyChart)
+        dailyChart = try container.decode(AccentPalette.self, forKey: .dailyChart)
+        billingChart = try container.decodeIfPresent(AccentPalette.self, forKey: .billingChart) ?? .ocean
+        widgetRingNormal = try container.decode(AccentPalette.self, forKey: .widgetRingNormal)
+        widgetRingWarning50 = try container.decode(AccentPalette.self, forKey: .widgetRingWarning50)
+        widgetRingWarning20 = try container.decode(AccentPalette.self, forKey: .widgetRingWarning20)
+    }
+
+    init(fill palette: AccentPalette) {
+        self.init(
+            monthlyChart: palette,
+            dailyChart: palette,
+            billingChart: palette,
+            widgetRingNormal: palette,
+            widgetRingWarning50: palette,
+            widgetRingWarning20: palette
+        )
+    }
+
+    func palette(for role: AccentRole) -> AccentPalette {
+        switch role {
+        case .monthlyChart:
+            return monthlyChart
+        case .dailyChart:
+            return dailyChart
+        case .billingChart:
+            return billingChart
+        case .widgetRingNormal:
+            return widgetRingNormal
+        case .widgetRingWarning50:
+            return widgetRingWarning50
+        case .widgetRingWarning20:
+            return widgetRingWarning20
+        }
+    }
+
+    func widgetRingColors(for ratio: Double) -> [Color] {
+        if ratio <= 0.20 {
+            return widgetRingWarning20.widgetRingGradient
+        } else if ratio <= 0.50 {
+            return widgetRingWarning50.widgetRingGradient
+        }
+        return widgetRingNormal.widgetRingGradient
+    }
+}
+
+struct AccentColorStore {
+    private let keyV2 = "accentColor.preferences.v2"
+    private let legacyKey = "accentColor.preference"
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    func load() -> AccentColorSettings {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        if let data = defaults.data(forKey: keyV2),
+           let decoded = try? decoder.decode(AccentColorSettings.self, from: data) {
+            return decoded
+        }
+
+        // migrate legacy single preference if exists
+        if let raw = defaults.string(forKey: legacyKey),
+           let palette = migrateLegacyPalette(rawValue: raw) {
+            let migrated = AccentColorSettings(fill: palette)
+            save(migrated)
+            return migrated
+        }
+
+        return .default
+    }
+
+    func save(_ preference: AccentColorSettings) {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        if let data = try? encoder.encode(preference) {
+            defaults.set(data, forKey: keyV2)
+        }
+    }
+
+    private func migrateLegacyPalette(rawValue: String) -> AccentPalette? {
+        if let palette = AccentPalette(rawValue: rawValue) {
+            return palette
+        }
+        switch rawValue {
+        case "mioBlue":
+            return .ocean
+        default:
+            return nil
+        }
+    }
+}
+
+private extension Color {
+    init(dynamicGraphiteLight light: UIColor, dark: UIColor) {
+        self = Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? dark : light
+        })
+    }
+}
+
+struct DisplayPreferences: Codable, Equatable {
+    var defaultUsageChart: UsageChartDefault = .monthly
+
+    static let `default` = DisplayPreferences(defaultUsageChart: .monthly)
+}
+
+struct DisplayPreferencesStore {
+    private let key = "display.preferences.v1"
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    func load() -> DisplayPreferences {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        if let data = defaults.data(forKey: key),
+           let decoded = try? decoder.decode(DisplayPreferences.self, from: data) {
+            return decoded
+        }
+        return .default
+    }
+
+    func save(_ preferences: DisplayPreferences) {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        if let data = try? encoder.encode(preferences) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
 
 struct WidgetServiceSnapshot: Codable, Equatable {
     let serviceName: String

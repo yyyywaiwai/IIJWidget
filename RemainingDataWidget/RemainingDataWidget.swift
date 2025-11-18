@@ -5,34 +5,44 @@ import AppIntents
 struct RemainingDataEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
+    let accentColors: AccentColorSettings
 }
 
 struct RemainingDataProvider: AppIntentTimelineProvider {
     typealias Intent = RemainingDataConfigurationIntent
     private let store = WidgetDataStore()
     private let refreshService = WidgetRefreshService()
+    private let accentStore = AccentColorStore()
 
     func placeholder(in context: Context) -> RemainingDataEntry {
-        RemainingDataEntry(date: Date(), snapshot: .placeholder)
+        RemainingDataEntry(date: Date(), snapshot: .placeholder, accentColors: accentStore.load())
     }
 
     func snapshot(for configuration: RemainingDataConfigurationIntent, in context: Context) async -> RemainingDataEntry {
         if context.isPreview {
-            return RemainingDataEntry(date: Date(), snapshot: .placeholder)
+            return RemainingDataEntry(date: Date(), snapshot: .placeholder, accentColors: accentStore.load())
         }
         let snapshot = store.loadSnapshot()
-        return RemainingDataEntry(date: snapshot?.fetchedAt ?? Date(), snapshot: snapshot)
+        return RemainingDataEntry(
+            date: snapshot?.fetchedAt ?? Date(),
+            snapshot: snapshot,
+            accentColors: resolveAccentColors(from: configuration)
+        )
     }
 
     func timeline(for configuration: RemainingDataConfigurationIntent, in context: Context) async -> Timeline<RemainingDataEntry> {
         if context.isPreview {
-            let previewEntry = RemainingDataEntry(date: Date(), snapshot: .placeholder)
+            let previewEntry = RemainingDataEntry(date: Date(), snapshot: .placeholder, accentColors: accentStore.load())
             return Timeline(entries: [previewEntry], policy: .after(Date().addingTimeInterval(1800)))
         }
 
         let snapshot = await loadSnapshotForTimeline()
         let entryDate = snapshot?.fetchedAt ?? Date()
-        let entry = RemainingDataEntry(date: entryDate, snapshot: snapshot)
+        let entry = RemainingDataEntry(
+            date: entryDate,
+            snapshot: snapshot,
+            accentColors: resolveAccentColors(from: configuration)
+        )
         let refresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
         return Timeline(entries: [entry], policy: .after(refresh))
     }
@@ -58,6 +68,10 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
             print("[RemainingDataProvider] refresh failed: \(error.localizedDescription)")
         }
         return store.loadSnapshot()
+    }
+
+    private func resolveAccentColors(from configuration: RemainingDataConfigurationIntent) -> AccentColorSettings {
+        configuration.resolvedAccentSettings(using: accentStore)
     }
 }
 
@@ -293,14 +307,7 @@ struct RemainingDataWidgetEntryView: View {
     }
 
     private func ringColors(for ratio: Double) -> [Color] {
-        switch ratio {
-        case 0.5...:
-            return [Color.green, Color.teal]
-        case 0.2...:
-            return [Color.orange, Color.yellow]
-        default:
-            return [Color.red, Color.pink]
-        }
+        entry.accentColors.widgetRingColors(for: ratio)
     }
 
     private func cardBackground<Content: View>(

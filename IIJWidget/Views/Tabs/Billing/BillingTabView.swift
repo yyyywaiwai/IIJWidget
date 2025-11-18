@@ -4,6 +4,7 @@ import Charts
 struct BillingTabView: View {
     @ObservedObject var viewModel: AppViewModel
     let bill: BillSummaryResponse?
+    let accentColors: AccentColorSettings
     @State private var presentedEntry: BillSummaryResponse.BillEntry?
 
     var body: some View {
@@ -20,7 +21,7 @@ struct BillingTabView: View {
                         }
                         .buttonStyle(.borderedProminent)
                     }
-                    BillingBarChart(bill: bill)
+                    BillingBarChart(bill: bill, accentColors: accentColors)
                     BillSummaryList(bill: bill) { entry in
                         presentedEntry = entry
                     }
@@ -87,6 +88,7 @@ struct BillingHighlightCard: View {
 
 struct BillingBarChart: View {
     let bill: BillSummaryResponse
+    let accentColors: AccentColorSettings
     private var points: [BillChartPoint] {
         billingChartPoints(from: bill)
     }
@@ -139,11 +141,17 @@ struct BillingBarChart: View {
     }
 
     private var paidGradient: LinearGradient {
-        LinearGradient(colors: [Color.blue, Color.mint], startPoint: .bottom, endPoint: .top)
+        let colors = accentColors.palette(for: .billingChart).chartGradient
+        return LinearGradient(colors: colors, startPoint: .bottom, endPoint: .top)
     }
 
     private var unpaidGradient: LinearGradient {
-        LinearGradient(colors: [Color.orange, Color.red], startPoint: .bottom, endPoint: .top)
+        let base = accentColors.palette(for: .billingChart).chartGradient
+        let tinted: [Color] = [
+            base.first?.opacity(0.6) ?? .orange.opacity(0.7),
+            Color.red.opacity(0.9)
+        ]
+        return LinearGradient(colors: tinted, startPoint: .bottom, endPoint: .top)
     }
 
     private var axisPositions: [Double] {
@@ -489,4 +497,3 @@ struct BillDetailItemRow: View {
         }
     }
 }
-

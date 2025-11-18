@@ -3,6 +3,7 @@ import Charts
 
 struct MonthlyUsageChartCard: View {
     let services: [MonthlyUsageService]
+    let accentColor: AccentColorSettings
     @State private var selectedIndex: Int?
     private var points: [UsageChartPoint] {
         monthlyChartPoints(from: services)
@@ -41,7 +42,7 @@ struct MonthlyUsageChartCard: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color.blue.opacity(0.8), Color.mint.opacity(0.8)],
+                        colors: accentColor.palette(for: .monthlyChart).chartGradient,
                         startPoint: .bottom,
                         endPoint: .top
                     )
@@ -166,6 +167,7 @@ struct MonthlyUsageChartCard: View {
 
 struct DailyUsageChartCard: View {
     let services: [DailyUsageService]
+    let accentColor: AccentColorSettings
     @State private var selectedIndex: Int?
 
     private var points: [UsageChartPoint] {
@@ -214,7 +216,7 @@ struct DailyUsageChartCard: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color.purple.opacity(0.85), Color.pink.opacity(0.85)],
+                        colors: accentColor.palette(for: .dailyChart).secondaryChartGradient,
                         startPoint: .bottom,
                         endPoint: .top
                     )
@@ -340,4 +342,3 @@ struct DailyUsageChartCard: View {
     }
 
 }
-

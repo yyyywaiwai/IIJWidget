@@ -166,16 +166,22 @@ struct OnboardingCredentialSetupStep: View {
                 }
 
                 VStack(spacing: 16) {
-                    TextField("mioID / メールアドレス", text: $viewModel.mioId)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(.roundedBorder)
-                        .focused($field, equals: .mioId)
+                    IconTextField(
+                        systemImage: "person.fill",
+                        placeholder: "mioID / メールアドレス",
+                        text: $viewModel.mioId
+                    )
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($field, equals: .mioId)
 
-                    SecureField("パスワード", text: $viewModel.password)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($field, equals: .password)
+                    IconSecureField(
+                        systemImage: "lock.fill",
+                        placeholder: "パスワード",
+                        text: $viewModel.password
+                    )
+                    .focused($field, equals: .password)
 
                     Text("入力内容は端末キーチェーンに暗号化して保存され、ウィジェット更新時にのみ使用されます。")
                         .font(.footnote)
@@ -189,10 +195,11 @@ struct OnboardingCredentialSetupStep: View {
                         viewModel.refreshManually()
                         onFinish()
                     } label: {
-                        Label("今すぐログインして残量取得", systemImage: "arrow.triangle.2.circlepath")
+                        Label("保存して取得", systemImage: "arrow.down.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .disabled(!viewModel.canSubmit)
                 }
 
@@ -205,3 +212,38 @@ struct OnboardingCredentialSetupStep: View {
     }
 }
 
+private struct IconTextField: View {
+    let systemImage: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct IconSecureField: View {
+    let systemImage: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+            SecureField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}

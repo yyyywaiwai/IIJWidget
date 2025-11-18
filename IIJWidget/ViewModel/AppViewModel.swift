@@ -23,15 +23,22 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var credentialFieldsHidden = false
     @Published private(set) var lastLoginSource: WidgetRefreshService.LoginSource?
     @Published private(set) var hasStoredCredentials = false
+    @Published var accentColors: AccentColorSettings = .default
+    @Published var displayPreferences: DisplayPreferences = .default
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
     private let payloadStore = AggregatePayloadStore()
+    private let accentColorStore = AccentColorStore()
+    private let displayPreferenceStore = DisplayPreferencesStore()
 
     private var refreshTaskInFlight = false
     private var lastAutomaticRefresh: Date?
 
     init() {
+        accentColors = accentColorStore.load()
+        displayPreferences = displayPreferenceStore.load()
+
         if let saved = try? credentialStore.load() {
             mioId = saved.mioId
             password = saved.password
@@ -42,6 +49,35 @@ final class AppViewModel: ObservableObject {
         if let cachedPayload = payloadStore.load() {
             state = .loaded(cachedPayload)
         }
+    }
+
+    func updateAccentColor(for role: AccentRole, to palette: AccentPalette) {
+        var next = accentColors
+        switch role {
+        case .monthlyChart:
+            next.monthlyChart = palette
+        case .dailyChart:
+            next.dailyChart = palette
+        case .billingChart:
+            next.billingChart = palette
+        case .widgetRingNormal:
+            next.widgetRingNormal = palette
+        case .widgetRingWarning50:
+            next.widgetRingWarning50 = palette
+        case .widgetRingWarning20:
+            next.widgetRingWarning20 = palette
+        }
+
+        guard accentColors != next else { return }
+        accentColorStore.save(next)
+        accentColors = next
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
+    }
+
+    func updateDefaultUsageChart(_ newValue: UsageChartDefault) {
+        guard displayPreferences.defaultUsageChart != newValue else { return }
+        displayPreferences.defaultUsageChart = newValue
+        displayPreferenceStore.save(displayPreferences)
     }
 
     var canSubmit: Bool {

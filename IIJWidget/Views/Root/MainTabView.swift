@@ -10,7 +10,12 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedSection) {
-            HomeDashboardTab(payload: payload)
+            HomeDashboardTab(
+                payload: payload,
+                accentColors: viewModel.accentColors,
+                defaultUsageChart: viewModel.displayPreferences.defaultUsageChart,
+                saveDefaultUsageChart: viewModel.updateDefaultUsageChart
+            )
                 .tabItem { Label(AppSection.home.title, systemImage: AppSection.home.iconName) }
                 .tag(AppSection.home)
 
@@ -22,7 +27,7 @@ struct MainTabView: View {
             .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }
             .tag(AppSection.usage)
 
-            BillingTabView(viewModel: viewModel, bill: payload?.bill)
+            BillingTabView(viewModel: viewModel, bill: payload?.bill, accentColors: viewModel.accentColors)
                 .tabItem { Label(AppSection.billing.title, systemImage: AppSection.billing.iconName) }
                 .tag(AppSection.billing)
 
