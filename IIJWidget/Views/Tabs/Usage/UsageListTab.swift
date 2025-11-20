@@ -4,6 +4,7 @@ struct UsageListTab: View {
     let monthly: [MonthlyUsageService]
     let daily: [DailyUsageService]
     let serviceStatus: ServiceStatusResponse?
+    let showsLowSpeedUsage: Bool
 
     @State private var isMonthlyExpanded = true
     @State private var isDailyExpanded = true
@@ -16,7 +17,10 @@ struct UsageListTab: View {
                     if monthly.isEmpty {
                         PlaceholderRow(text: "まだ月別データがありません。")
                     } else {
-                        MonthlyUsageSection(services: monthly)
+                        MonthlyUsageSection(
+                            services: monthly,
+                            showsLowSpeedUsage: showsLowSpeedUsage
+                        )
                             .padding(.top, 8)
                     }
                 } label: {
@@ -30,7 +34,10 @@ struct UsageListTab: View {
                     if daily.isEmpty {
                         PlaceholderRow(text: "まだ日別データがありません。")
                     } else {
-                        DailyUsageSection(services: daily)
+                        DailyUsageSection(
+                            services: daily,
+                            showsLowSpeedUsage: showsLowSpeedUsage
+                        )
                             .padding(.top, 8)
                     }
                 } label: {
@@ -58,11 +65,15 @@ struct UsageListTab: View {
 
 struct MonthlyUsageSection: View {
     let services: [MonthlyUsageService]
+    let showsLowSpeedUsage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(services) { service in
-                MonthlyUsageServiceCard(service: service)
+                MonthlyUsageServiceCard(
+                    service: service,
+                    showsLowSpeedUsage: showsLowSpeedUsage
+                )
             }
         }
     }
@@ -70,6 +81,7 @@ struct MonthlyUsageSection: View {
 
 struct MonthlyUsageServiceCard: View {
     let service: MonthlyUsageService
+    let showsLowSpeedUsage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -91,12 +103,11 @@ struct MonthlyUsageServiceCard: View {
                             .monospacedDigit()
                         Spacer()
                         if entry.hasData {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("高速: \(entry.highSpeedText ?? "-")")
-                                Text("低速: \(entry.lowSpeedText ?? "-")")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            UsageBreakdownView(
+                                highSpeedText: entry.highSpeedText,
+                                lowSpeedText: entry.lowSpeedText,
+                                showsLowSpeedUsage: showsLowSpeedUsage
+                            )
                         } else if let note = entry.note {
                             Text(note)
                                 .font(.caption)
@@ -118,11 +129,15 @@ struct MonthlyUsageServiceCard: View {
 
 struct DailyUsageSection: View {
     let services: [DailyUsageService]
+    let showsLowSpeedUsage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(services) { service in
-                DailyUsageServiceCard(service: service)
+                DailyUsageServiceCard(
+                    service: service,
+                    showsLowSpeedUsage: showsLowSpeedUsage
+                )
             }
         }
     }
@@ -130,6 +145,7 @@ struct DailyUsageSection: View {
 
 struct DailyUsageServiceCard: View {
     let service: DailyUsageService
+    let showsLowSpeedUsage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -151,12 +167,11 @@ struct DailyUsageServiceCard: View {
                             .monospacedDigit()
                         Spacer()
                         if entry.hasData {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("高速: \(entry.highSpeedText ?? "-")")
-                                Text("低速: \(entry.lowSpeedText ?? "-")")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            UsageBreakdownView(
+                                highSpeedText: entry.highSpeedText,
+                                lowSpeedText: entry.lowSpeedText,
+                                showsLowSpeedUsage: showsLowSpeedUsage
+                            )
                         } else if let note = entry.note {
                             Text(note)
                                 .font(.caption)
@@ -173,6 +188,31 @@ struct DailyUsageServiceCard: View {
         }
         .padding()
         .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct UsageBreakdownView: View {
+    let highSpeedText: String?
+    let lowSpeedText: String?
+    let showsLowSpeedUsage: Bool
+
+    var body: some View {
+        if showsLowSpeedUsage {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("高速: \(highSpeedText ?? "-")")
+                Text("低速: \(lowSpeedText ?? "-")")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+            Text(highSpeedText ?? "-")
+                .font(.title3.bold())
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("高速通信の利用量")
+            .accessibilityValue(highSpeedText ?? "-")
+        }
     }
 }
 

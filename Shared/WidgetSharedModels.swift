@@ -268,9 +268,32 @@ private extension Color {
 }
 
 struct DisplayPreferences: Codable, Equatable {
-    var defaultUsageChart: UsageChartDefault = .monthly
+    var defaultUsageChart: UsageChartDefault
+    var showsLowSpeedUsage: Bool
 
-    static let `default` = DisplayPreferences(defaultUsageChart: .monthly)
+    static let `default` = DisplayPreferences()
+
+    init(defaultUsageChart: UsageChartDefault = .monthly, showsLowSpeedUsage: Bool = false) {
+        self.defaultUsageChart = defaultUsageChart
+        self.showsLowSpeedUsage = showsLowSpeedUsage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultUsageChart
+        case showsLowSpeedUsage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        defaultUsageChart = try container.decodeIfPresent(UsageChartDefault.self, forKey: .defaultUsageChart) ?? .monthly
+        showsLowSpeedUsage = try container.decodeIfPresent(Bool.self, forKey: .showsLowSpeedUsage) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(defaultUsageChart, forKey: .defaultUsageChart)
+        try container.encode(showsLowSpeedUsage, forKey: .showsLowSpeedUsage)
+    }
 }
 
 struct DisplayPreferencesStore {

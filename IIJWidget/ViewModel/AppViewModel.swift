@@ -80,6 +80,12 @@ final class AppViewModel: ObservableObject {
         displayPreferenceStore.save(displayPreferences)
     }
 
+    func updateShowsLowSpeedUsage(_ newValue: Bool) {
+        guard displayPreferences.showsLowSpeedUsage != newValue else { return }
+        displayPreferences.showsLowSpeedUsage = newValue
+        displayPreferenceStore.save(displayPreferences)
+    }
+
     var canSubmit: Bool {
         credentialFieldsHidden || currentManualCredentials() != nil
     }

@@ -22,7 +22,8 @@ struct MainTabView: View {
             UsageListTab(
                 monthly: payload?.monthlyUsage ?? [],
                 daily: payload?.dailyUsage ?? [],
-                serviceStatus: payload?.serviceStatus
+                serviceStatus: payload?.serviceStatus,
+                showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage
             )
             .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }
             .tag(AppSection.usage)

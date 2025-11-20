@@ -39,6 +39,14 @@ struct SettingsTab: View {
                     title: "ウィジェット円カラー (20%以下警告)",
                     selection: binding(for: .widgetRingWarning20)
                 )
+                Toggle(
+                    "低速通信の通信量を表示",
+                    isOn: Binding(
+                        get: { viewModel.displayPreferences.showsLowSpeedUsage },
+                        set: { viewModel.updateShowsLowSpeedUsage($0) }
+                    )
+                )
+                .toggleStyle(.switch)
             }
 
             Section(header: Text("プロジェクト")) {
