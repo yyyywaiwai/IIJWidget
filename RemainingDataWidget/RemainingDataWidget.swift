@@ -59,6 +59,10 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
                 allowSessionReuse: true,
                 allowKeychainFallback: true
             )
+            
+            // Check usage alerts after successful refresh
+            await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
+            
             if let snapshot = WidgetSnapshot(payload: outcome.payload) {
                 return snapshot
             }

@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import SwiftUI
 import WidgetKit
+import UserNotifications
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -25,12 +26,15 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var hasStoredCredentials = false
     @Published var accentColors: AccentColorSettings = .default
     @Published var displayPreferences: DisplayPreferences = .default
+    @Published var usageAlertSettings: UsageAlertSettings = .default
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
     private let payloadStore = AggregatePayloadStore()
     private let accentColorStore = AccentColorStore()
     private let displayPreferenceStore = DisplayPreferencesStore()
+    private let usageAlertStore = UsageAlertStore()
+    private let usageAlertChecker = UsageAlertChecker()
 
     private var refreshTaskInFlight = false
     private var lastAutomaticRefresh: Date?
@@ -38,6 +42,7 @@ final class AppViewModel: ObservableObject {
     init() {
         accentColors = accentColorStore.load()
         displayPreferences = displayPreferenceStore.load()
+        usageAlertSettings = usageAlertStore.load()
 
         if let saved = try? credentialStore.load() {
             mioId = saved.mioId
@@ -66,6 +71,8 @@ final class AppViewModel: ObservableObject {
             next.widgetRingWarning50 = palette
         case .widgetRingWarning20:
             next.widgetRingWarning20 = palette
+        case .usageAlertWarning:
+            next.usageAlertWarning = palette
         }
 
         guard accentColors != next else { return }
@@ -84,6 +91,41 @@ final class AppViewModel: ObservableObject {
         guard displayPreferences.showsLowSpeedUsage != newValue else { return }
         displayPreferences.showsLowSpeedUsage = newValue
         displayPreferenceStore.save(displayPreferences)
+    }
+
+    func updateUsageAlertSettings(_ newValue: UsageAlertSettings) {
+        guard usageAlertSettings != newValue else { return }
+        
+        // Check if thresholds changed
+        let monthlyThresholdChanged = usageAlertSettings.monthlyThresholdMB != newValue.monthlyThresholdMB
+        let dailyThresholdChanged = usageAlertSettings.dailyThresholdMB != newValue.dailyThresholdMB
+        
+        usageAlertSettings = newValue
+        usageAlertStore.save(usageAlertSettings)
+        
+        // Reset notification limits if thresholds changed
+        if monthlyThresholdChanged || dailyThresholdChanged {
+            let defaults = UserDefaults(suiteName: "group.com.yyyywaiwai.IIJWidget") ?? .standard
+            if monthlyThresholdChanged {
+                defaults.removeObject(forKey: "lastMonthlyAlertDate")
+                print("🔄 Monthly threshold changed, reset notification limit")
+            }
+            if dailyThresholdChanged {
+                defaults.removeObject(forKey: "lastDailyAlertDate")
+                print("🔄 Daily threshold changed, reset notification limit")
+            }
+        }
+        
+        if newValue.isEnabled && newValue.sendNotification {
+            Task {
+                await requestNotificationPermission()
+            }
+        }
+    }
+
+    private func requestNotificationPermission() async {
+        let center = UNUserNotificationCenter.current()
+        try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 
     var canSubmit: Bool {
@@ -155,6 +197,9 @@ final class AppViewModel: ObservableObject {
             state = .loaded(outcome.payload)
             lastLoginSource = outcome.loginSource
             handleCredentialVisibility(after: outcome.loginSource)
+            Task {
+                await usageAlertChecker.checkUsageAlerts(payload: outcome.payload)
+            }
         } catch {
             state = .failed(error.localizedDescription, lastPayload: previousPayload)
         }
@@ -193,5 +238,20 @@ final class AppViewModel: ObservableObject {
             credentialFieldsHidden = false
         }
         hasStoredCredentials = (try? credentialStore.load()) != nil
+    }
+
+
+
+    func sendTestNotification() {
+        Task {
+            await requestNotificationPermission()
+            let content = UNMutableNotificationContent()
+            content.title = "テスト通知"
+            content.body = "これはテスト通知です。通知機能は正常に動作しています。"
+            content.sound = .default
+
+            let request = UNNotificationRequest(identifier: "test_notification_\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+            try? await UNUserNotificationCenter.current().add(request)
+        }
     }
 }

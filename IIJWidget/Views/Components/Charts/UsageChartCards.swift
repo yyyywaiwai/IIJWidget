@@ -4,6 +4,7 @@ import Charts
 struct MonthlyUsageChartCard: View {
     let services: [MonthlyUsageService]
     let accentColor: AccentColorSettings
+    let usageAlertSettings: UsageAlertSettings
     @State private var selectedIndex: Int?
     private var points: [UsageChartPoint] {
         monthlyChartPoints(from: services)
@@ -42,7 +43,7 @@ struct MonthlyUsageChartCard: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: accentColor.palette(for: .monthlyChart).chartGradient,
+                        colors: gradientColors(for: entry.point.value),
                         startPoint: .bottom,
                         endPoint: .top
                     )
@@ -163,11 +164,20 @@ struct MonthlyUsageChartCard: View {
         return derived
     }
 
+    private func gradientColors(for valueGB: Double) -> [Color] {
+        if usageAlertSettings.isEnabled,
+           let thresholdMB = usageAlertSettings.monthlyThresholdMB,
+           (valueGB * 1024) > Double(thresholdMB) {
+            return accentColor.palette(for: .usageAlertWarning).secondaryChartGradient
+        }
+        return accentColor.palette(for: .monthlyChart).secondaryChartGradient
+    }
 }
 
 struct DailyUsageChartCard: View {
     let services: [DailyUsageService]
     let accentColor: AccentColorSettings
+    let usageAlertSettings: UsageAlertSettings
     @State private var selectedIndex: Int?
 
     private var points: [UsageChartPoint] {
@@ -216,7 +226,7 @@ struct DailyUsageChartCard: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: accentColor.palette(for: .dailyChart).secondaryChartGradient,
+                        colors: gradientColors(for: entry.point.value),
                         startPoint: .bottom,
                         endPoint: .top
                     )
@@ -341,4 +351,12 @@ struct DailyUsageChartCard: View {
         return derived
     }
 
+    private func gradientColors(for valueMB: Double) -> [Color] {
+        if usageAlertSettings.isEnabled,
+           let thresholdMB = usageAlertSettings.dailyThresholdMB,
+           valueMB > Double(thresholdMB) {
+            return accentColor.palette(for: .usageAlertWarning).secondaryChartGradient
+        }
+        return accentColor.palette(for: .dailyChart).secondaryChartGradient
+    }
 }

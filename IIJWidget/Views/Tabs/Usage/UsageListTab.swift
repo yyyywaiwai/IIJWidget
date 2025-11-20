@@ -4,6 +4,7 @@ struct UsageListTab: View {
     let monthly: [MonthlyUsageService]
     let daily: [DailyUsageService]
     let serviceStatus: ServiceStatusResponse?
+    let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
     @State private var isMonthlyExpanded = true
@@ -19,6 +20,7 @@ struct UsageListTab: View {
                     } else {
                         MonthlyUsageSection(
                             services: monthly,
+                            usageAlertSettings: usageAlertSettings,
                             showsLowSpeedUsage: showsLowSpeedUsage
                         )
                             .padding(.top, 8)
@@ -36,6 +38,7 @@ struct UsageListTab: View {
                     } else {
                         DailyUsageSection(
                             services: daily,
+                            usageAlertSettings: usageAlertSettings,
                             showsLowSpeedUsage: showsLowSpeedUsage
                         )
                             .padding(.top, 8)
@@ -65,6 +68,7 @@ struct UsageListTab: View {
 
 struct MonthlyUsageSection: View {
     let services: [MonthlyUsageService]
+    let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
     var body: some View {
@@ -72,6 +76,7 @@ struct MonthlyUsageSection: View {
             ForEach(services) { service in
                 MonthlyUsageServiceCard(
                     service: service,
+                    usageAlertSettings: usageAlertSettings,
                     showsLowSpeedUsage: showsLowSpeedUsage
                 )
             }
@@ -81,6 +86,7 @@ struct MonthlyUsageSection: View {
 
 struct MonthlyUsageServiceCard: View {
     let service: MonthlyUsageService
+    let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
     var body: some View {
@@ -106,6 +112,7 @@ struct MonthlyUsageServiceCard: View {
                             UsageBreakdownView(
                                 highSpeedText: entry.highSpeedText,
                                 lowSpeedText: entry.lowSpeedText,
+                                isAlert: isAlert(entry: entry),
                                 showsLowSpeedUsage: showsLowSpeedUsage
                             )
                         } else if let note = entry.note {
@@ -125,10 +132,17 @@ struct MonthlyUsageServiceCard: View {
         .padding()
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
+
+    private func isAlert(entry: MonthlyUsageEntry) -> Bool {
+        guard usageAlertSettings.isEnabled, let threshold = usageAlertSettings.monthlyThresholdMB else { return false }
+        let totalGB = (entry.highSpeedGB ?? 0) + (entry.lowSpeedGB ?? 0)
+        return (totalGB * 1024) > Double(threshold)
+    }
 }
 
 struct DailyUsageSection: View {
     let services: [DailyUsageService]
+    let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
     var body: some View {
@@ -136,6 +150,7 @@ struct DailyUsageSection: View {
             ForEach(services) { service in
                 DailyUsageServiceCard(
                     service: service,
+                    usageAlertSettings: usageAlertSettings,
                     showsLowSpeedUsage: showsLowSpeedUsage
                 )
             }
@@ -145,6 +160,7 @@ struct DailyUsageSection: View {
 
 struct DailyUsageServiceCard: View {
     let service: DailyUsageService
+    let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
     var body: some View {
@@ -170,6 +186,7 @@ struct DailyUsageServiceCard: View {
                             UsageBreakdownView(
                                 highSpeedText: entry.highSpeedText,
                                 lowSpeedText: entry.lowSpeedText,
+                                isAlert: isAlert(entry: entry),
                                 showsLowSpeedUsage: showsLowSpeedUsage
                             )
                         } else if let note = entry.note {
@@ -189,11 +206,18 @@ struct DailyUsageServiceCard: View {
         .padding()
         .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
+
+    private func isAlert(entry: DailyUsageEntry) -> Bool {
+        guard usageAlertSettings.isEnabled, let threshold = usageAlertSettings.dailyThresholdMB else { return false }
+        let totalMB = (entry.highSpeedMB ?? 0) + (entry.lowSpeedMB ?? 0)
+        return totalMB > Double(threshold)
+    }
 }
 
 private struct UsageBreakdownView: View {
     let highSpeedText: String?
     let lowSpeedText: String?
+    let isAlert: Bool
     let showsLowSpeedUsage: Bool
 
     var body: some View {
@@ -203,12 +227,12 @@ private struct UsageBreakdownView: View {
                 Text("低速: \(lowSpeedText ?? "-")")
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isAlert ? .orange : .secondary)
         } else {
             Text(highSpeedText ?? "-")
                 .font(.title3.bold())
                 .monospacedDigit()
-                .foregroundStyle(.primary)
+                .foregroundStyle(isAlert ? .orange : .primary)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("高速通信の利用量")
             .accessibilityValue(highSpeedText ?? "-")

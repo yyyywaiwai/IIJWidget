@@ -112,7 +112,8 @@ extension RemainingDataConfigurationIntent {
             billingChart: billingChartColor.resolve(fallback: saved.billingChart),
             widgetRingNormal: widgetRingColor.resolve(fallback: saved.widgetRingNormal),
             widgetRingWarning50: widgetWarning50Color.resolve(fallback: saved.widgetRingWarning50),
-            widgetRingWarning20: widgetWarning20Color.resolve(fallback: saved.widgetRingWarning20)
+            widgetRingWarning20: widgetWarning20Color.resolve(fallback: saved.widgetRingWarning20),
+            usageAlertWarning: saved.usageAlertWarning
         )
     }
 }

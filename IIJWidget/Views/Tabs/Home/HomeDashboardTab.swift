@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeDashboardTab: View {
     let payload: AggregatePayload?
     let accentColors: AccentColorSettings
+    let usageAlertSettings: UsageAlertSettings
     let defaultUsageChart: UsageChartDefault
     let saveDefaultUsageChart: (UsageChartDefault) -> Void
     private let columns = [GridItem(.adaptive(minimum: 320), spacing: 16)]
@@ -23,6 +24,7 @@ struct HomeDashboardTab: View {
                                 monthlyServices: payload.monthlyUsage,
                                 dailyServices: payload.dailyUsage,
                                 accentColors: accentColors,
+                                usageAlertSettings: usageAlertSettings,
                                 defaultChart: defaultUsageChart,
                                 onDefaultChange: saveDefaultUsageChart
                             )
@@ -59,6 +61,7 @@ struct UsageChartSwitcher: View {
     let monthlyServices: [MonthlyUsageService]
     let dailyServices: [DailyUsageService]
     let accentColors: AccentColorSettings
+    let usageAlertSettings: UsageAlertSettings
     let defaultChart: UsageChartDefault
     let onDefaultChange: (UsageChartDefault) -> Void
 
@@ -68,12 +71,14 @@ struct UsageChartSwitcher: View {
         monthlyServices: [MonthlyUsageService],
         dailyServices: [DailyUsageService],
         accentColors: AccentColorSettings,
+        usageAlertSettings: UsageAlertSettings,
         defaultChart: UsageChartDefault,
         onDefaultChange: @escaping (UsageChartDefault) -> Void
     ) {
         self.monthlyServices = monthlyServices
         self.dailyServices = dailyServices
         self.accentColors = accentColors
+        self.usageAlertSettings = usageAlertSettings
         self.defaultChart = defaultChart
         self.onDefaultChange = onDefaultChange
         _selection = State(initialValue: Tab(rawValue: defaultChart.rawValue) ?? .monthly)
@@ -92,12 +97,12 @@ struct UsageChartSwitcher: View {
             }
 
             ZStack {
-                MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors)
+                MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
                     .opacity(selection == .monthly ? 1 : 0)
                     .allowsHitTesting(selection == .monthly)
                     .accessibilityHidden(selection != .monthly)
 
-                DailyUsageChartCard(services: dailyServices, accentColor: accentColors)
+                DailyUsageChartCard(services: dailyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
                     .opacity(selection == .daily ? 1 : 0)
                     .allowsHitTesting(selection == .daily)
                     .accessibilityHidden(selection != .daily)

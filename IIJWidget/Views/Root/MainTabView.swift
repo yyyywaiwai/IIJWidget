@@ -13,6 +13,7 @@ struct MainTabView: View {
             HomeDashboardTab(
                 payload: payload,
                 accentColors: viewModel.accentColors,
+                usageAlertSettings: viewModel.usageAlertSettings,
                 defaultUsageChart: viewModel.displayPreferences.defaultUsageChart,
                 saveDefaultUsageChart: viewModel.updateDefaultUsageChart
             )
@@ -23,6 +24,7 @@ struct MainTabView: View {
                 monthly: payload?.monthlyUsage ?? [],
                 daily: payload?.dailyUsage ?? [],
                 serviceStatus: payload?.serviceStatus,
+                usageAlertSettings: viewModel.usageAlertSettings,
                 showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage
             )
             .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }

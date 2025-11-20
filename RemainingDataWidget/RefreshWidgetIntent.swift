@@ -14,12 +14,16 @@ struct RefreshWidgetIntent: AppIntent {
         }
 
         do {
-            _ = try await refreshService.refresh(
+            let outcome = try await refreshService.refresh(
                 manualCredentials: nil,
                 persistManualCredentials: false,
                 allowSessionReuse: true,
                 allowKeychainFallback: true
             )
+            
+            // Check usage alerts after successful refresh
+            await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
+            
             await MainActor.run {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             }

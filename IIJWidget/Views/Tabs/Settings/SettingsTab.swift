@@ -7,11 +7,53 @@ struct SettingsTab: View {
     let presentOnboarding: () -> Void
     @State private var showLogoutConfirmation = false
     @State private var logoutErrorMessage: String?
+    @FocusState private var usageAlertFocused: Bool
 
     var body: some View {
-        Form {
+        NavigationView {
+            Form {
             Section(header: Text("資格情報")) {
                 CredentialsCard(viewModel: viewModel, focusedField: focusedField)
+            }
+
+            Section(header: Text("使いすぎアラート")) {
+                Toggle("使いすぎアラートを有効にする", isOn: Binding(
+                    get: { viewModel.usageAlertSettings.isEnabled },
+                    set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(isEnabled: $0)) }
+                ))
+
+                if viewModel.usageAlertSettings.isEnabled {
+                    Toggle("通知を送信", isOn: Binding(
+                        get: { viewModel.usageAlertSettings.sendNotification },
+                        set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(sendNotification: $0)) }
+                    ))
+
+                    HStack {
+                        Text("月に")
+                        TextField("1000", value: Binding(
+                            get: { viewModel.usageAlertSettings.monthlyThresholdMB },
+                            set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(monthlyThresholdMB: $0)) }
+                        ), format: .number)
+                        .keyboardType(.numberPad)
+                        .focused($usageAlertFocused)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 100)
+                        Text("MB超えた時警告")
+                    }
+
+                    HStack {
+                        Text("当日に")
+                        TextField("100", value: Binding(
+                            get: { viewModel.usageAlertSettings.dailyThresholdMB },
+                            set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(dailyThresholdMB: $0)) }
+                        ), format: .number)
+                        .keyboardType(.numberPad)
+                        .focused($usageAlertFocused)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 100)
+                        Text("MBを超えた時警告")
+                    }
+                }
             }
 
             Section(header: Text("表示")) {
@@ -38,6 +80,10 @@ struct SettingsTab: View {
                 AccentPalettePickerRow(
                     title: "ウィジェット円カラー (20%以下警告)",
                     selection: binding(for: .widgetRingWarning20)
+                )
+                AccentPalettePickerRow(
+                    title: "使いすぎアラート警告カラー",
+                    selection: binding(for: .usageAlertWarning)
                 )
                 Toggle(
                     "低速通信の通信量を表示",
@@ -67,6 +113,17 @@ struct SettingsTab: View {
             } footer: {
                 Text("ログアウトするとキーチェーンの資格情報が削除され、次回起動時に再設定が必要です。")
                     .font(.footnote)
+            }
+            }
+            .navigationTitle("設定")
+        .toolbar {
+            if usageAlertFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完了") {
+                        usageAlertFocused = false
+                    }
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -98,6 +155,7 @@ struct SettingsTab: View {
             if let logoutErrorMessage {
                 Text(logoutErrorMessage)
             }
+        }
         }
     }
 

@@ -118,6 +118,7 @@ enum AccentRole: CaseIterable {
     case widgetRingNormal
     case widgetRingWarning50
     case widgetRingWarning20
+    case usageAlertWarning
 }
 
 enum UsageChartDefault: String, Codable {
@@ -133,6 +134,7 @@ struct AccentColorSettings: Codable, Equatable {
         case widgetRingNormal
         case widgetRingWarning50
         case widgetRingWarning20
+        case usageAlertWarning
     }
 
     var monthlyChart: AccentPalette
@@ -141,6 +143,7 @@ struct AccentColorSettings: Codable, Equatable {
     var widgetRingNormal: AccentPalette
     var widgetRingWarning50: AccentPalette
     var widgetRingWarning20: AccentPalette
+    var usageAlertWarning: AccentPalette
 
     static let `default` = AccentColorSettings(
         monthlyChart: .ocean,
@@ -148,7 +151,8 @@ struct AccentColorSettings: Codable, Equatable {
         billingChart: .ocean,
         widgetRingNormal: .forest,
         widgetRingWarning50: .citrus,
-        widgetRingWarning20: .sunset
+        widgetRingWarning20: .sunset,
+        usageAlertWarning: .sunset
     )
 
     init(
@@ -157,7 +161,8 @@ struct AccentColorSettings: Codable, Equatable {
         billingChart: AccentPalette,
         widgetRingNormal: AccentPalette,
         widgetRingWarning50: AccentPalette,
-        widgetRingWarning20: AccentPalette
+        widgetRingWarning20: AccentPalette,
+        usageAlertWarning: AccentPalette
     ) {
         self.monthlyChart = monthlyChart
         self.dailyChart = dailyChart
@@ -165,6 +170,7 @@ struct AccentColorSettings: Codable, Equatable {
         self.widgetRingNormal = widgetRingNormal
         self.widgetRingWarning50 = widgetRingWarning50
         self.widgetRingWarning20 = widgetRingWarning20
+        self.usageAlertWarning = usageAlertWarning
     }
 
     init(from decoder: Decoder) throws {
@@ -175,6 +181,7 @@ struct AccentColorSettings: Codable, Equatable {
         widgetRingNormal = try container.decode(AccentPalette.self, forKey: .widgetRingNormal)
         widgetRingWarning50 = try container.decode(AccentPalette.self, forKey: .widgetRingWarning50)
         widgetRingWarning20 = try container.decode(AccentPalette.self, forKey: .widgetRingWarning20)
+        usageAlertWarning = try container.decodeIfPresent(AccentPalette.self, forKey: .usageAlertWarning) ?? .sunset
     }
 
     init(fill palette: AccentPalette) {
@@ -184,7 +191,8 @@ struct AccentColorSettings: Codable, Equatable {
             billingChart: palette,
             widgetRingNormal: palette,
             widgetRingWarning50: palette,
-            widgetRingWarning20: palette
+            widgetRingWarning20: palette,
+            usageAlertWarning: palette
         )
     }
 
@@ -202,6 +210,8 @@ struct AccentColorSettings: Codable, Equatable {
             return widgetRingWarning50
         case .widgetRingWarning20:
             return widgetRingWarning20
+        case .usageAlertWarning:
+            return usageAlertWarning
         }
     }
 
@@ -410,6 +420,69 @@ struct WidgetDataStore {
             let placeholder = WidgetSnapshot(fetchedAt: Date(), primaryService: nil, isRefreshing: isRefreshing)
             save(snapshot: placeholder)
             return true
+        }
+    }
+}
+
+struct UsageAlertSettings: Codable, Equatable {
+    var isEnabled: Bool
+    var sendNotification: Bool
+    var monthlyThresholdMB: Int?
+    var dailyThresholdMB: Int?
+
+    static let `default` = UsageAlertSettings(
+        isEnabled: false,
+        sendNotification: false,
+        monthlyThresholdMB: nil,
+        dailyThresholdMB: nil
+    )
+
+    func updating(
+        isEnabled: Bool? = nil,
+        sendNotification: Bool? = nil,
+        monthlyThresholdMB: Int?? = nil,
+        dailyThresholdMB: Int?? = nil
+    ) -> UsageAlertSettings {
+        var copy = self
+        if let isEnabled { copy.isEnabled = isEnabled }
+        if let sendNotification { copy.sendNotification = sendNotification }
+        if let monthlyThresholdMB { copy.monthlyThresholdMB = monthlyThresholdMB }
+        if let dailyThresholdMB { copy.dailyThresholdMB = dailyThresholdMB }
+        return copy
+    }
+}
+
+struct UsageAlertStore {
+    private let key = "usageAlert.settings.v1"
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    func load() -> UsageAlertSettings {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        if let data = defaults.data(forKey: key),
+           let decoded = try? decoder.decode(UsageAlertSettings.self, from: data) {
+            return decoded
+        }
+        return .default
+    }
+
+    func save(_ settings: UsageAlertSettings) {
+        let defaults = AppGroup.userDefaults ?? UserDefaults.standard
+        
+        // Check if thresholds have changed
+        let previousSettings = load()
+        let thresholdsChanged = previousSettings.monthlyThresholdMB != settings.monthlyThresholdMB ||
+                                previousSettings.dailyThresholdMB != settings.dailyThresholdMB
+        
+        // Reset notification history if thresholds changed
+        if thresholdsChanged {
+            print("🔄 Thresholds changed, resetting notification history")
+            defaults.removeObject(forKey: "lastMonthlyAlertDate")
+            defaults.removeObject(forKey: "lastDailyAlertDate")
+        }
+        
+        if let data = try? encoder.encode(settings) {
+            defaults.set(data, forKey: key)
         }
     }
 }
