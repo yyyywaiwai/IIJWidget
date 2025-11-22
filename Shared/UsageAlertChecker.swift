@@ -39,10 +39,12 @@ struct UsageAlertChecker {
             payload: payload,
             threshold: settings.monthlyThresholdMB,
             currentMonth: currentMonth,
+            currentMonthDate: today,
             lastAlertMonth: lastMonthlyMonth,
             defaults: defaults,
             center: center,
-            key: lastMonthlyKey
+            key: lastMonthlyKey,
+            calendar: calendar
         )
         
         // Check Daily Usage
@@ -64,10 +66,12 @@ struct UsageAlertChecker {
         payload: AggregatePayload,
         threshold: Int?,
         currentMonth: String,
+        currentMonthDate: Date,
         lastAlertMonth: String?,
         defaults: UserDefaults,
         center: UNUserNotificationCenter,
-        key: String
+        key: String,
+        calendar: Calendar
     ) async {
         guard let threshold else { return }
         
@@ -78,17 +82,20 @@ struct UsageAlertChecker {
         
         let totalUsedGB = payload.monthlyUsage.reduce(0.0) { serviceSum, service in
             serviceSum + service.entries.reduce(0.0) { entrySum, entry in
-                entrySum + (entry.highSpeedGB ?? 0) + (entry.lowSpeedGB ?? 0)
+                guard isSameMonth(as: currentMonthDate, label: entry.monthLabel, calendar: calendar) else { return entrySum }
+                return entrySum + (entry.highSpeedGB ?? 0) + (entry.lowSpeedGB ?? 0)
             }
         }
-        let totalUsedMB = totalUsedGB * 1024
+        // 1GB=1000MB としてユーザ表示・閾値判定を合わせる
+        let totalUsedMB = totalUsedGB * 1000
         
 
         
         if totalUsedMB > Double(threshold) {
             let content = UNMutableNotificationContent()
             content.title = "データ利用量アラート (今月)"
-            content.body = "今月の利用量が\(Int(totalUsedMB))MBを超えました (設定: \(threshold)MB)"
+            let currentMBText = Int(totalUsedMB)
+            content.body = "今月の利用量が設定した\(threshold)MBを超えました (現在: \(currentMBText)MB)"
             content.sound = .default
             
             // Use 1 second trigger to ensure notification appears in Notification Center
@@ -133,7 +140,7 @@ struct UsageAlertChecker {
         if totalUsedMB > Double(threshold) {
             let content = UNMutableNotificationContent()
             content.title = "データ利用量アラート (当日)"
-            content.body = "当日の利用量が\(Int(totalUsedMB))MBを超えました (設定: \(threshold)MB)"
+            content.body = "当日の利用量が設定した\(threshold)MBを超えました (現在: \(Int(totalUsedMB))MB)"
             content.sound = .default
             
             // Use 1 second trigger to ensure notification appears in Notification Center
@@ -143,4 +150,47 @@ struct UsageAlertChecker {
             defaults.set(todayString, forKey: key)
         }
     }
+}
+
+private func isSameMonth(as reference: Date, label: String, calendar: Calendar) -> Bool {
+    guard let components = monthComponents(from: label, calendar: calendar),
+          let month = components.month,
+          let year = components.year else {
+        return false
+    }
+
+    let refYear = calendar.component(.year, from: reference)
+    let refMonth = calendar.component(.month, from: reference)
+    return refYear == year && refMonth == month
+}
+
+private func monthComponents(from label: String, calendar: Calendar) -> DateComponents? {
+    // 抽出できる数値のみを使って年/月を判定する
+    let regex = try? NSRegularExpression(pattern: "\\d+")
+    let nsString = label as NSString
+    let matches = regex?.matches(in: label, range: NSRange(location: 0, length: nsString.length)) ?? []
+    let segments = matches.compactMap { Int(nsString.substring(with: $0.range)) }
+
+    var year: Int?
+    var month: Int?
+
+    if segments.count >= 2 {
+        if let first = segments.first, first >= 1000 {
+            year = first
+            month = segments[1]
+        } else if let last = segments.last, last >= 1000 {
+            year = last
+            month = segments.first
+        }
+    }
+
+    if month == nil, let first = segments.first, first <= 12 {
+        month = first
+    }
+
+    var components = DateComponents()
+    components.year = year
+    components.month = month
+    // day は不要
+    return (components.year != nil && components.month != nil) ? components : nil
 }

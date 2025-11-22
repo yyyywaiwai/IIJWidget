@@ -6,7 +6,16 @@ struct HomeDashboardTab: View {
     let usageAlertSettings: UsageAlertSettings
     let defaultUsageChart: UsageChartDefault
     let saveDefaultUsageChart: (UsageChartDefault) -> Void
-    private let columns = [GridItem(.adaptive(minimum: 320), spacing: 16)]
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var gridColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            return [GridItem(.flexible(), spacing: 16)]
+        } else {
+            return [GridItem(.adaptive(minimum: 320), spacing: 16)]
+        }
+    }
 
     var body: some View {
         Group {
@@ -19,7 +28,7 @@ struct HomeDashboardTab: View {
                             accentColors: accentColors
                         )
 
-                        LazyVGrid(columns: columns, spacing: 16) {
+                        LazyVGrid(columns: gridColumns, spacing: 16) {
                             UsageChartSwitcher(
                                 monthlyServices: payload.monthlyUsage,
                                 dailyServices: payload.dailyUsage,
@@ -65,6 +74,7 @@ struct UsageChartSwitcher: View {
     let defaultChart: UsageChartDefault
     let onDefaultChange: (UsageChartDefault) -> Void
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selection: Tab
 
     init(
@@ -84,30 +94,41 @@ struct UsageChartSwitcher: View {
         _selection = State(initialValue: Tab(rawValue: defaultChart.rawValue) ?? .monthly)
     }
 
+    private var isRegularWidth: Bool { horizontalSizeClass == .regular }
+
     var body: some View {
         VStack(spacing: 12) {
-            Picker("利用量表示", selection: $selection) {
-                ForEach(UsageChartSwitcher.Tab.allCases) { tab in
-                    Text(tab.label).tag(tab)
+            if isRegularWidth {
+                // iPad 等の横幅が広い環境ではタブ切り替えを隠し、月別・日別を並べて同時表示
+                VStack(spacing: 12) {
+                    MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
+                    DailyUsageChartCard(services: dailyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
                 }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: selection) { newValue in
-                onDefaultChange(UsageChartDefault(rawValue: newValue.rawValue) ?? .monthly)
-            }
+                .frame(maxWidth: .infinity)
+            } else {
+                Picker("利用量表示", selection: $selection) {
+                    ForEach(UsageChartSwitcher.Tab.allCases) { tab in
+                        Text(tab.label).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: selection) { newValue in
+                    onDefaultChange(UsageChartDefault(rawValue: newValue.rawValue) ?? .monthly)
+                }
 
-            ZStack {
-                MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
-                    .opacity(selection == .monthly ? 1 : 0)
-                    .allowsHitTesting(selection == .monthly)
-                    .accessibilityHidden(selection != .monthly)
+                ZStack {
+                    MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
+                        .opacity(selection == .monthly ? 1 : 0)
+                        .allowsHitTesting(selection == .monthly)
+                        .accessibilityHidden(selection != .monthly)
 
-                DailyUsageChartCard(services: dailyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
-                    .opacity(selection == .daily ? 1 : 0)
-                    .allowsHitTesting(selection == .daily)
-                    .accessibilityHidden(selection != .daily)
+                    DailyUsageChartCard(services: dailyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
+                        .opacity(selection == .daily ? 1 : 0)
+                        .allowsHitTesting(selection == .daily)
+                        .accessibilityHidden(selection != .daily)
+                }
+                .animation(.spring(response: 0.25, dampingFraction: 0.88), value: selection)
             }
-            .animation(.spring(response: 0.25, dampingFraction: 0.88), value: selection)
         }
     }
 }

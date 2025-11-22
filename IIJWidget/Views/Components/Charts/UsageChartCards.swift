@@ -167,7 +167,7 @@ struct MonthlyUsageChartCard: View {
     private func gradientColors(for valueGB: Double) -> [Color] {
         if usageAlertSettings.isEnabled,
            let thresholdMB = usageAlertSettings.monthlyThresholdMB,
-           (valueGB * 1024) > Double(thresholdMB) {
+           (valueGB * 1000) > Double(thresholdMB) {
             return accentColor.palette(for: .usageAlertWarning).secondaryChartGradient
         }
         return accentColor.palette(for: .monthlyChart).secondaryChartGradient

@@ -9,27 +9,40 @@ struct SettingsTab: View {
     @State private var logoutErrorMessage: String?
     @FocusState private var usageAlertFocused: Bool
 
+    private var accentColor: Color {
+        .accentColor
+    }
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
             Section(header: Text("資格情報")) {
                 CredentialsCard(viewModel: viewModel, focusedField: focusedField)
             }
 
             Section(header: Text("使いすぎアラート")) {
-                Toggle("使いすぎアラートを有効にする", isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { viewModel.usageAlertSettings.isEnabled },
                     set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(isEnabled: $0)) }
-                ))
+                )) {
+                    Text("使いすぎアラートを有効にする")
+                        .foregroundStyle(accentColor)
+                }
+                .tint(accentColor)
 
                 if viewModel.usageAlertSettings.isEnabled {
-                    Toggle("通知を送信", isOn: Binding(
+                    Toggle(isOn: Binding(
                         get: { viewModel.usageAlertSettings.sendNotification },
                         set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(sendNotification: $0)) }
-                    ))
+                    )) {
+                        Text("通知を送信")
+                            .foregroundStyle(accentColor)
+                    }
+                    .tint(accentColor)
 
                     HStack {
-                        Text("月に")
+                        Text("今月に")
+                            .foregroundStyle(accentColor)
                         TextField("1000", value: Binding(
                             get: { viewModel.usageAlertSettings.monthlyThresholdMB },
                             set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(monthlyThresholdMB: $0)) }
@@ -39,10 +52,12 @@ struct SettingsTab: View {
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
                         Text("MB超えた時警告")
+                            .foregroundStyle(accentColor)
                     }
 
                     HStack {
                         Text("当日に")
+                            .foregroundStyle(accentColor)
                         TextField("100", value: Binding(
                             get: { viewModel.usageAlertSettings.dailyThresholdMB },
                             set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(dailyThresholdMB: $0)) }
@@ -52,6 +67,7 @@ struct SettingsTab: View {
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
                         Text("MBを超えた時警告")
+                            .foregroundStyle(accentColor)
                     }
                 }
             }
@@ -85,14 +101,15 @@ struct SettingsTab: View {
                     title: "使いすぎアラート警告カラー",
                     selection: binding(for: .usageAlertWarning)
                 )
-                Toggle(
-                    "低速通信の通信量を表示",
-                    isOn: Binding(
-                        get: { viewModel.displayPreferences.showsLowSpeedUsage },
-                        set: { viewModel.updateShowsLowSpeedUsage($0) }
-                    )
-                )
+                Toggle(isOn: Binding(
+                    get: { viewModel.displayPreferences.showsLowSpeedUsage },
+                    set: { viewModel.updateShowsLowSpeedUsage($0) }
+                )) {
+                    Text("低速通信の通信量を表示")
+                        .foregroundStyle(accentColor)
+                }
                 .toggleStyle(.switch)
+                .tint(accentColor)
             }
 
             Section(header: Text("プロジェクト")) {
