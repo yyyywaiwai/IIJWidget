@@ -183,7 +183,13 @@ extension MemberTopResponse.ServiceInfo {
         let sorted = couponData?.sorted { (lhs, rhs) -> Bool in
             (lhs.sequenceNo ?? 0) < (rhs.sequenceNo ?? 0)
         }
-        return sorted?.first { ($0.couponValue ?? 0) > 0 }?.couponValue
+        if let positive = sorted?.first(where: { ($0.couponValue ?? 0) > 0 }) {
+            return positive.couponValue
+        }
+        if let any = sorted?.first(where: { $0.couponValue != nil }) {
+            return max(any.couponValue ?? 0, 0)
+        }
+        return nil
     }
 }
 
