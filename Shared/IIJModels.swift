@@ -189,7 +189,8 @@ extension MemberTopResponse.ServiceInfo {
         if let any = sorted?.first(where: { $0.couponValue != nil }) {
             return max(any.couponValue ?? 0, 0)
         }
-        return nil
+        // API が 0GB を表す場合でも couponData が欠落するケースがあるため、0 を返してウィジェット更新を継続させる
+        return 0
     }
 }
 

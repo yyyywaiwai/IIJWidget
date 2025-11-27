@@ -67,8 +67,9 @@ struct WidgetRefreshService {
 
     private func finalize(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
         payloadStore.save(payload: payload)
-        if var snapshot = WidgetSnapshot(payload: payload) {
-            if widgetDataStore.loadSnapshot()?.isRefreshing == true {
+        let previousSnapshot = widgetDataStore.loadSnapshot()
+        if var snapshot = WidgetSnapshot(payload: payload, fallback: previousSnapshot) {
+            if previousSnapshot?.isRefreshing == true {
                 snapshot = snapshot.updatingRefreshingState(true)
             }
             widgetDataStore.save(snapshot: snapshot)

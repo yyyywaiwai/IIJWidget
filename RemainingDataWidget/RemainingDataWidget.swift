@@ -48,7 +48,8 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
     }
 
     private func loadSnapshotForTimeline() async -> WidgetSnapshot? {
-        if let cached = store.loadSnapshot(), cached.isRefreshing {
+        let cached = store.loadSnapshot()
+        if cached?.isRefreshing == true {
             return cached
         }
 
@@ -63,7 +64,7 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
             // Check usage alerts after successful refresh
             await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
             
-            if let snapshot = WidgetSnapshot(payload: outcome.payload) {
+            if let snapshot = WidgetSnapshot(payload: outcome.payload, fallback: cached) {
                 return snapshot
             }
         } catch WidgetRefreshError.missingCredentials {
