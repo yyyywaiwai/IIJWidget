@@ -89,11 +89,21 @@ struct BillingHighlightCard: View {
 struct BillingBarChart: View {
     let bill: BillSummaryResponse
     let accentColors: AccentColorSettings
+    @State private var animateBars = false
     private var points: [BillChartPoint] {
         billingChartPoints(from: bill)
     }
     private var indexedPoints: [(index: Int, point: BillChartPoint)] {
         points.enumerated().map { (index: $0.offset, point: $0.element) }
+    }
+
+    private var yMaxValue: Double {
+        let maxValue = indexedPoints.map { $0.point.value }.max() ?? 1
+        return max(1, maxValue * 1.08)
+    }
+
+    private var animationToken: String {
+        indexedPoints.map { "\($0.point.id)-\($0.point.value)" }.joined(separator: "|")
     }
 
     var body: some View {
@@ -104,7 +114,7 @@ struct BillingBarChart: View {
                 Chart(indexedPoints, id: \.point.id) { entry in
                     BarMark(
                         x: .value("月インデックス", centeredValue(for: entry.index)),
-                        y: .value("金額(¥)", entry.point.value),
+                        y: .value("金額(¥)", animatedValue(entry.point.value)),
                         width: .fixed(36)
                     )
                     .foregroundStyle(entry.point.isUnpaid ? unpaidGradient : paidGradient)
@@ -127,6 +137,7 @@ struct BillingBarChart: View {
                 .chartYAxis {
                     AxisMarks(position: .leading)
                 }
+                .chartYScale(domain: 0...yMaxValue)
                 .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
@@ -136,6 +147,9 @@ struct BillingBarChart: View {
                 }
                 .padding(.bottom, axisLabelPadding)
                 .frame(height: 260)
+                .onAppear { triggerBarAnimation() }
+                .onChange(of: animationToken) { _ in triggerBarAnimation() }
+                .onDisappear { animateBars = false }
             }
         }
     }
@@ -191,6 +205,19 @@ struct BillingBarChart: View {
         let derived = Int(normalized.rounded())
         guard indexedPoints.indices.contains(derived) else { return nil }
         return derived
+    }
+
+    private func animatedValue(_ value: Double) -> Double {
+        animateBars ? value : 0
+    }
+
+    private func triggerBarAnimation() {
+        animateBars = false
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
+                animateBars = true
+            }
+        }
     }
 
 }

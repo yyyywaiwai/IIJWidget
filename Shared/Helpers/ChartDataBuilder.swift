@@ -1,7 +1,8 @@
 import Foundation
 
 struct UsageChartPoint: Identifiable, Equatable {
-    let id = UUID()
+    /// グラフのアニメーションが正しく動くよう、データのキーをそのまま安定IDにする
+    let id: String
     let displayLabel: String
     let rawKey: String
     let value: Double
@@ -9,6 +10,7 @@ struct UsageChartPoint: Identifiable, Equatable {
     let date: Date?
 
     init(rawKey: String, displayLabel: String, value: Double, date: Date?) {
+        self.id = rawKey
         self.rawKey = rawKey
         self.displayLabel = displayLabel
         self.value = value

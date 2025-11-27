@@ -51,7 +51,7 @@ struct SettingsTab: View {
                         .focused($usageAlertFocused)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
-                        Text("MB超えた時警告")
+                        Text("MBを超えた時警告")
                             .foregroundStyle(accentColor)
                     }
 

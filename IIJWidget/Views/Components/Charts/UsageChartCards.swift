@@ -5,7 +5,9 @@ struct MonthlyUsageChartCard: View {
     let services: [MonthlyUsageService]
     let accentColor: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
+    var animationTrigger: AnyHashable? = nil
     @State private var selectedIndex: Int?
+    @State private var animateBars = false
     private var points: [UsageChartPoint] {
         monthlyChartPoints(from: services)
     }
@@ -20,6 +22,11 @@ struct MonthlyUsageChartCard: View {
         indexedPoints.last?.index
     }
 
+    private var yMaxValue: Double {
+        let maxValue = indexedPoints.map { $0.point.value }.max() ?? 1
+        return max(1, maxValue * 1.08)
+    }
+
     var body: some View {
         DashboardCard(title: "月別データ利用量", subtitle: "直近6か月 (GB)") {
             if indexedPoints.isEmpty {
@@ -27,8 +34,20 @@ struct MonthlyUsageChartCard: View {
             } else {
                 chartContent
                     .frame(height: 220)
-                    .onAppear { selectedIndex = defaultSelectionIndex }
-                    .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
+                    .onAppear {
+                        selectedIndex = defaultSelectionIndex
+                        triggerBarAnimation()
+                    }
+                    .onChange(of: services) { _ in
+                        selectedIndex = defaultSelectionIndex
+                        triggerBarAnimation()
+                    }
+                    .onChange(of: animationTrigger) { _ in
+                        triggerBarAnimation()
+                    }
+                    .onDisappear {
+                        animateBars = false
+                    }
             }
         }
     }
@@ -38,7 +57,7 @@ struct MonthlyUsageChartCard: View {
             ForEach(indexedPoints, id: \.point.id) { entry in
                 BarMark(
                     x: .value("月インデックス", centeredValue(for: entry.index)),
-                    y: .value("合計(GB)", entry.point.value),
+                    y: .value("合計(GB)", animatedValue(entry.point.value)),
                     width: .fixed(28)
                 )
                 .foregroundStyle(
@@ -51,15 +70,13 @@ struct MonthlyUsageChartCard: View {
             }
 
             if let selectedIndex, let selectedPoint {
-                RuleMark(x: .value("選択", centeredValue(for: selectedIndex)))
+                RuleMark(
+                    x: .value("選択", centeredValue(for: selectedIndex)),
+                    yStart: .value("最小", 0),
+                    yEnd: .value("選択値", selectedPoint.value)
+                )
                     .lineStyle(.init(lineWidth: 1, dash: [4]))
                     .foregroundStyle(.secondary)
-                    .annotation(position: .top, alignment: .center) {
-                        ChartCallout(
-                            title: selectedPoint.displayLabel,
-                            valueText: String(format: "%.1fGB", selectedPoint.value)
-                        )
-                    }
             }
         }
         .chartYAxis {
@@ -75,11 +92,15 @@ struct MonthlyUsageChartCard: View {
                 }
             }
         }
+        .chartYScale(domain: 0...yMaxValue)
         .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
         .chartXSelection(value: chartSelectionBinding)
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
+                    selectionCalloutLayer(proxy: proxy, geometry: geometry)
+                        .allowsHitTesting(false)
+
                     axisLabelsLayer(proxy: proxy, geometry: geometry)
                         .allowsHitTesting(false)
 
@@ -90,13 +111,9 @@ struct MonthlyUsageChartCard: View {
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
                                     guard !indexedPoints.isEmpty else { return }
-                                    let plotFrame = proxy.plotAreaFrame
-                                    let frameRect = geometry[plotFrame]
-                                    let origin = frameRect.origin
-                                    let xPosition = value.location.x - origin.x
-                                    guard xPosition >= 0, xPosition <= frameRect.width else { return }
-                                    if let axisValue: Double = proxy.value(atX: xPosition),
-                                       let newIndex = index(from: axisValue) {
+                                    if let newIndex = nearestIndex(from: value.location,
+                                                                  proxy: proxy,
+                                                                  geometry: geometry) {
                                         selectedIndex = newIndex
                                     }
                                 }
@@ -104,6 +121,7 @@ struct MonthlyUsageChartCard: View {
                 }
             }
         }
+        .id(animationTrigger ?? AnyHashable("monthlyChart"))
         .padding(.bottom, axisLabelPadding)
     }
 
@@ -172,13 +190,80 @@ struct MonthlyUsageChartCard: View {
         }
         return accentColor.palette(for: .monthlyChart).secondaryChartGradient
     }
+
+    private func animatedValue(_ value: Double) -> Double {
+        animateBars ? value : 0
+    }
+
+    private func triggerBarAnimation() {
+        animateBars = false
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
+                animateBars = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionCalloutLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
+        let plotFrame = proxy.plotAreaFrame
+        let rect = geometry[plotFrame]
+
+        if let selectedIndex,
+           let selectedPoint,
+           rect != .null,
+           let xPosition = proxy.position(forX: centeredValue(for: selectedIndex)) {
+            let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
+            let calloutHeight: CGFloat = 44
+            let gap: CGFloat = 8
+            let candidateY = rect.minY + barTopY - (calloutHeight + gap)
+            let clampedY = max(rect.minY - 12, candidateY)
+
+            ChartCallout(
+                title: selectedPoint.displayLabel,
+                valueText: String(format: "%.1fGB", selectedPoint.value)
+            )
+            .position(
+                x: rect.minX + xPosition,
+                y: clampedY
+            )
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func nearestIndex(from location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> Int? {
+        let plotFrame = proxy.plotAreaFrame
+        let rect = geometry[plotFrame]
+        guard rect != .null else { return nil }
+
+        let relativeX = location.x - rect.minX
+        guard relativeX >= 0, relativeX <= rect.width else { return nil }
+
+        var closest: (index: Int, distance: CGFloat)?
+
+        for entry in indexedPoints {
+            guard let position = proxy.position(forX: centeredValue(for: entry.index)) else { continue }
+            let distance = abs(position - relativeX)
+
+            if let current = closest {
+                if distance < current.distance { closest = (entry.index, distance) }
+            } else {
+                closest = (entry.index, distance)
+            }
+        }
+
+        return closest?.index
+    }
 }
 
 struct DailyUsageChartCard: View {
     let services: [DailyUsageService]
     let accentColor: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
+    var animationTrigger: AnyHashable? = nil
     @State private var selectedIndex: Int?
+    @State private var animateBars = false
 
     private var points: [UsageChartPoint] {
         dailyChartPoints(from: services)
@@ -203,6 +288,11 @@ struct DailyUsageChartCard: View {
         indexedPoints.last?.index
     }
 
+    private var yMaxValue: Double {
+        let maxValue = indexedPoints.map { $0.point.value }.max() ?? 1
+        return max(1, maxValue * 1.08)
+    }
+
     var body: some View {
         DashboardCard(title: "日別データ利用量", subtitle: "履歴 (MB)") {
             if indexedPoints.isEmpty {
@@ -210,8 +300,20 @@ struct DailyUsageChartCard: View {
             } else {
                 chartContent
                     .frame(height: 220)
-                    .onAppear { selectedIndex = defaultSelectionIndex }
-                    .onChange(of: services) { _ in selectedIndex = defaultSelectionIndex }
+                    .onAppear {
+                        selectedIndex = defaultSelectionIndex
+                        triggerBarAnimation()
+                    }
+                    .onChange(of: services) { _ in
+                        selectedIndex = defaultSelectionIndex
+                        triggerBarAnimation()
+                    }
+                    .onChange(of: animationTrigger) { _ in
+                        triggerBarAnimation()
+                    }
+                    .onDisappear {
+                        animateBars = false
+                    }
             }
         }
     }
@@ -221,7 +323,7 @@ struct DailyUsageChartCard: View {
             ForEach(indexedPoints, id: \.point.id) { entry in
                 BarMark(
                     x: .value("日インデックス", centeredValue(for: entry.index)),
-                    y: .value("合計(MB)", entry.point.value),
+                    y: .value("合計(MB)", animatedValue(entry.point.value)),
                     width: .fixed(barWidth)
                 )
                 .foregroundStyle(
@@ -234,12 +336,13 @@ struct DailyUsageChartCard: View {
             }
 
             if let selectedIndex, let selectedPoint {
-                RuleMark(x: .value("選択", centeredValue(for: selectedIndex)))
+                RuleMark(
+                    x: .value("選択", centeredValue(for: selectedIndex)),
+                    yStart: .value("最小", 0),
+                    yEnd: .value("選択値", selectedPoint.value)
+                )
                     .lineStyle(.init(lineWidth: 1, dash: [4]))
                     .foregroundStyle(.secondary)
-                    .annotation(position: .top, alignment: .center) {
-                        ChartCallout(title: selectedPoint.displayLabel, valueText: String(format: "%.0fMB", selectedPoint.value))
-                    }
             }
         }
         .chartYAxis {
@@ -255,11 +358,15 @@ struct DailyUsageChartCard: View {
                 }
             }
         }
+        .chartYScale(domain: 0...yMaxValue)
         .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
         .chartXSelection(value: chartSelectionBinding)
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
+                    selectionCalloutLayer(proxy: proxy, geometry: geometry)
+                        .allowsHitTesting(false)
+
                     axisLabelsLayer(proxy: proxy, geometry: geometry)
                         .allowsHitTesting(false)
 
@@ -270,13 +377,9 @@ struct DailyUsageChartCard: View {
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
                                     guard !indexedPoints.isEmpty else { return }
-                                    let plotFrame = proxy.plotAreaFrame
-                                    let frameRect = geometry[plotFrame]
-                                    let origin = frameRect.origin
-                                    let xPosition = value.location.x - origin.x
-                                    guard xPosition >= 0, xPosition <= frameRect.width else { return }
-                                    if let axisValue: Double = proxy.value(atX: xPosition),
-                                       let newIndex = index(from: axisValue) {
+                                    if let newIndex = nearestIndex(from: value.location,
+                                                                  proxy: proxy,
+                                                                  geometry: geometry) {
                                         selectedIndex = newIndex
                                     }
                                 }
@@ -284,6 +387,7 @@ struct DailyUsageChartCard: View {
                 }
             }
         }
+        .id(animationTrigger ?? AnyHashable("dailyChart"))
         .padding(.bottom, axisLabelPadding)
     }
 
@@ -358,5 +462,67 @@ struct DailyUsageChartCard: View {
             return accentColor.palette(for: .usageAlertWarning).secondaryChartGradient
         }
         return accentColor.palette(for: .dailyChart).secondaryChartGradient
+    }
+
+    private func animatedValue(_ value: Double) -> Double {
+        animateBars ? value : 0
+    }
+
+    private func triggerBarAnimation() {
+        animateBars = false
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
+                animateBars = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionCalloutLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
+        let plotFrame = proxy.plotAreaFrame
+        let rect = geometry[plotFrame]
+
+        if let selectedIndex,
+           let selectedPoint,
+           rect != .null,
+           let xPosition = proxy.position(forX: centeredValue(for: selectedIndex)) {
+            let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
+            let calloutHeight: CGFloat = 44
+            let gap: CGFloat = 8
+            let candidateY = rect.minY + barTopY - (calloutHeight + gap)
+            let clampedY = max(rect.minY - 12, candidateY)
+
+            ChartCallout(title: selectedPoint.displayLabel, valueText: String(format: "%.0fMB", selectedPoint.value))
+                .position(
+                    x: rect.minX + xPosition,
+                    y: clampedY
+                )
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func nearestIndex(from location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> Int? {
+        let plotFrame = proxy.plotAreaFrame
+        let rect = geometry[plotFrame]
+        guard rect != .null else { return nil }
+
+        let relativeX = location.x - rect.minX
+        guard relativeX >= 0, relativeX <= rect.width else { return nil }
+
+        var closest: (index: Int, distance: CGFloat)?
+
+        for entry in indexedPoints {
+            guard let position = proxy.position(forX: centeredValue(for: entry.index)) else { continue }
+            let distance = abs(position - relativeX)
+
+            if let current = closest {
+                if distance < current.distance { closest = (entry.index, distance) }
+            } else {
+                closest = (entry.index, distance)
+            }
+        }
+
+        return closest?.index
     }
 }

@@ -117,15 +117,23 @@ struct UsageChartSwitcher: View {
                 }
 
                 ZStack {
-                    MonthlyUsageChartCard(services: monthlyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
-                        .opacity(selection == .monthly ? 1 : 0)
-                        .allowsHitTesting(selection == .monthly)
-                        .accessibilityHidden(selection != .monthly)
-
-                    DailyUsageChartCard(services: dailyServices, accentColor: accentColors, usageAlertSettings: usageAlertSettings)
-                        .opacity(selection == .daily ? 1 : 0)
-                        .allowsHitTesting(selection == .daily)
-                        .accessibilityHidden(selection != .daily)
+                    if selection == .monthly {
+                        MonthlyUsageChartCard(
+                            services: monthlyServices,
+                            accentColor: accentColors,
+                            usageAlertSettings: usageAlertSettings,
+                            animationTrigger: selection
+                        )
+                        .transition(.opacity)
+                    } else {
+                        DailyUsageChartCard(
+                            services: dailyServices,
+                            accentColor: accentColors,
+                            usageAlertSettings: usageAlertSettings,
+                            animationTrigger: selection
+                        )
+                        .transition(.opacity)
+                    }
                 }
                 .animation(.spring(response: 0.25, dampingFraction: 0.88), value: selection)
             }
