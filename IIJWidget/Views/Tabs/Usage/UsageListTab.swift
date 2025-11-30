@@ -7,8 +7,8 @@ struct UsageListTab: View {
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
 
-    @State private var isMonthlyExpanded = true
-    @State private var isDailyExpanded = true
+    @State private var isMonthlyExpanded = false
+    @State private var isDailyExpanded = false
     @State private var isStatusExpanded = false
 
     var body: some View {
