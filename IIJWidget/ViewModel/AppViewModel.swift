@@ -35,6 +35,7 @@ final class AppViewModel: ObservableObject {
     private let displayPreferenceStore = DisplayPreferencesStore()
     private let usageAlertStore = UsageAlertStore()
     private let usageAlertChecker = UsageAlertChecker()
+    private let refreshLogStore = RefreshLogStore()
 
     private var refreshTaskInFlight = false
     private var lastAutomaticRefresh: Date?
@@ -105,7 +106,7 @@ final class AppViewModel: ObservableObject {
         
         // Reset notification limits if thresholds changed
         if monthlyThresholdChanged || dailyThresholdChanged {
-            let defaults = UserDefaults(suiteName: "group.com.yyyywaiwai.IIJWidget") ?? .standard
+            let defaults = AppGroup.userDefaults ?? .standard
             if monthlyThresholdChanged {
                 defaults.removeObject(forKey: "lastMonthlyAlertDate")
                 print("🔄 Monthly threshold changed, reset notification limit")
@@ -200,8 +201,17 @@ final class AppViewModel: ObservableObject {
             Task {
                 await usageAlertChecker.checkUsageAlerts(payload: outcome.payload)
             }
+            refreshLogStore.append(
+                trigger: trigger.logTrigger,
+                result: .success
+            )
         } catch {
             state = .failed(error.localizedDescription, lastPayload: previousPayload)
+            refreshLogStore.append(
+                trigger: trigger.logTrigger,
+                result: .failure,
+                errorDescription: error.localizedDescription
+            )
         }
     }
 
@@ -252,6 +262,17 @@ final class AppViewModel: ObservableObject {
 
             let request = UNNotificationRequest(identifier: "test_notification_\(Date().timeIntervalSince1970)", content: content, trigger: nil)
             try? await UNUserNotificationCenter.current().add(request)
+        }
+    }
+}
+
+private extension AppViewModel.RefreshTrigger {
+    var logTrigger: RefreshLogEntry.Trigger {
+        switch self {
+        case .automatic:
+            return .appAutomatic
+        case .manual:
+            return .appManual
         }
     }
 }

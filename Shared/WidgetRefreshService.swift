@@ -27,6 +27,7 @@ struct WidgetRefreshService {
     private let apiClient = IIJAPIClient()
     private let widgetDataStore = WidgetDataStore()
     private let payloadStore = AggregatePayloadStore()
+    private let debugStore = DebugResponseStore.shared
 
     func refresh(
         manualCredentials: Credentials? = nil,
@@ -34,6 +35,9 @@ struct WidgetRefreshService {
         allowSessionReuse: Bool = true,
         allowKeychainFallback: Bool = true
     ) async throws -> RefreshOutcome {
+        debugStore.beginCaptureSession()
+        defer { debugStore.finalizeCaptureSession() }
+
         if allowSessionReuse {
             do {
                 return finalize(payload: try await apiClient.fetchUsingExistingSession(), source: .sessionCookie)
@@ -74,6 +78,15 @@ struct WidgetRefreshService {
             }
             widgetDataStore.save(snapshot: snapshot)
         }
+        if let formattedPayload = DebugPrettyFormatter.prettyJSONString(payload) {
+            debugStore.appendResponse(
+                title: "AggregatePayload",
+                path: "payload",
+                category: .api,
+                rawText: formattedPayload,
+                formattedText: formattedPayload
+            )
+        }
         return RefreshOutcome(payload: payload, loginSource: source)
     }
 
@@ -106,5 +119,6 @@ struct WidgetRefreshService {
     func clearSessionArtifacts() {
         apiClient.clearPersistedSession()
         payloadStore.clear()
+        widgetDataStore.clear()
     }
 }

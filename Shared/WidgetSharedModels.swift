@@ -422,6 +422,10 @@ struct WidgetDataStore {
             return true
         }
     }
+
+    func clear() {
+        AppGroup.userDefaults?.removeObject(forKey: key)
+    }
 }
 
 struct UsageAlertSettings: Codable, Equatable {

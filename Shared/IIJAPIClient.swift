@@ -31,6 +31,7 @@ final class IIJAPIClient {
     private let session: URLSession
     private let cookieStorage: HTTPCookieStorage
     private let decoder = JSONDecoder()
+    private let debugStore = DebugResponseStore.shared
     private var hasValidSession = false
     private var activeCredentials: Credentials?
 
@@ -78,8 +79,22 @@ final class IIJAPIClient {
     func fetchBillDetail(entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
         let html = try await requestBillDetailHTML(for: entry)
         guard let detail = BillDetailHTMLParser(html: html).parse() else {
+            debugStore.appendResponse(
+                title: "請求詳細 (パース失敗)",
+                path: "/customer/bill/detail/",
+                category: .scraping,
+                rawText: html,
+                formattedText: nil
+            )
             throw IIJAPIClientError.invalidResponse
         }
+        debugStore.appendResponse(
+            title: "請求詳細 \(entry.formattedMonth)",
+            path: "/customer/bill/detail/",
+            category: .scraping,
+            rawText: html,
+            formattedText: DebugPrettyFormatter.prettyJSONString(detail)
+        )
         return detail
     }
 
@@ -111,28 +126,56 @@ final class IIJAPIClient {
             body: "{}".data(using: .utf8)
         )
         try throwIfAPIError(data)
-        return try decoder.decode(MemberTopResponse.self, from: data)
+        do {
+            let decoded = try decoder.decode(MemberTopResponse.self, from: data)
+            recordAPIResponse(title: "member/top", path: "/api/member/top", rawData: data, model: decoded)
+            return decoded
+        } catch {
+            recordAPIRawFailure(title: "member/top (decode失敗)", path: "/api/member/top", rawData: data)
+            throw error
+        }
     }
 
     private func fetchBillSummary() async throws -> BillSummaryResponse {
         let data = try await request(path: "/api/member/getBillSummary", method: "GET")
         try throwIfAPIError(data)
-        return try decoder.decode(BillSummaryResponse.self, from: data)
+        do {
+            let decoded = try decoder.decode(BillSummaryResponse.self, from: data)
+            recordAPIResponse(title: "getBillSummary", path: "/api/member/getBillSummary", rawData: data, model: decoded)
+            return decoded
+        } catch {
+            recordAPIRawFailure(title: "getBillSummary (decode失敗)", path: "/api/member/getBillSummary", rawData: data)
+            throw error
+        }
     }
 
     private func fetchServiceStatus() async throws -> ServiceStatusResponse {
         let data = try await request(path: "/api/member/getServiceStatus", method: "GET")
         try throwIfAPIError(data)
-        return try decoder.decode(ServiceStatusResponse.self, from: data)
+        do {
+            let decoded = try decoder.decode(ServiceStatusResponse.self, from: data)
+            recordAPIResponse(title: "getServiceStatus", path: "/api/member/getServiceStatus", rawData: data, model: decoded)
+            return decoded
+        } catch {
+            recordAPIRawFailure(title: "getServiceStatus (decode失敗)", path: "/api/member/getServiceStatus", rawData: data)
+            throw error
+        }
     }
 
     private func fetchMonthlyUsage() async throws -> [MonthlyUsageService] {
         let landingData = try await request(path: "/service/setup/hdc/viewmonthlydata/", method: "GET", contentType: nil)
-        guard let landingHTML = String(data: landingData, encoding: .utf8) else {
-            return []
-        }
+        let landingHTMLString = String(data: landingData, encoding: .utf8)
+        let landingHTML = landingHTMLString ?? DebugPrettyFormatter.utf8String(from: landingData)
+        debugStore.appendResponse(
+            title: "月次利用量 ランディング",
+            path: "/service/setup/hdc/viewmonthlydata/ [GET]",
+            category: .scraping,
+            rawText: landingHTML,
+            formattedText: nil
+        )
+        guard let landingHTMLString else { return [] }
 
-        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let landingParser = DataUsageHTMLParser(html: landingHTMLString)
         let landing = landingParser.extractLandingPageForms()
         guard !landing.forms.isEmpty else { return [] }
 
@@ -153,11 +196,16 @@ final class IIJAPIClient {
                         body: body,
                         contentType: "application/x-www-form-urlencoded"
                     )
-                    guard let detailHTML = String(data: response, encoding: .utf8) else {
-                        return (form.hdoCode, nil)
-                    }
+                    let detailHTML = String(data: response, encoding: .utf8) ?? DebugPrettyFormatter.utf8String(from: response)
                     let detailParser = DataUsageHTMLParser(html: detailHTML)
                     let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode)
+                    self.debugStore.appendResponse(
+                        title: "月次利用量 詳細 \(form.hdoCode)",
+                        path: "/service/setup/hdc/viewmonthlydata/ [POST]",
+                        category: .scraping,
+                        rawText: detailHTML,
+                        formattedText: service.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
+                    )
                     return (form.hdoCode, service)
                 }
             }
@@ -176,11 +224,18 @@ final class IIJAPIClient {
 
     private func fetchDailyUsage() async throws -> [DailyUsageService] {
         let landingData = try await request(path: "/service/setup/hdc/viewdailydata/", method: "GET", contentType: nil)
-        guard let landingHTML = String(data: landingData, encoding: .utf8) else {
-            return []
-        }
+        let landingHTMLString = String(data: landingData, encoding: .utf8)
+        let landingHTML = landingHTMLString ?? DebugPrettyFormatter.utf8String(from: landingData)
+        debugStore.appendResponse(
+            title: "日次利用量 ランディング",
+            path: "/service/setup/hdc/viewdailydata/ [GET]",
+            category: .scraping,
+            rawText: landingHTML,
+            formattedText: nil
+        )
+        guard let landingHTMLString else { return [] }
 
-        let landingParser = DataUsageHTMLParser(html: landingHTML)
+        let landingParser = DataUsageHTMLParser(html: landingHTMLString)
         let landing = landingParser.extractLandingPageForms()
         let previewServices = landingParser.previewDailyServices(for: landing.forms)
         guard !landing.forms.isEmpty else { return [] }
@@ -194,11 +249,15 @@ final class IIJAPIClient {
                     }
 
                     let detailParser = DataUsageHTMLParser(html: detailHTML)
-                    guard let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode) else {
-                        return (form.hdoCode, nil)
-                    }
-
-                    let merged = self.mergeDailyServices(primary: baseService, overlay: previewServices[form.hdoCode])
+                    let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode)
+                    let merged = baseService.map { self.mergeDailyServices(primary: $0, overlay: previewServices[form.hdoCode]) }
+                    self.debugStore.appendResponse(
+                        title: "日次利用量 詳細 \(form.hdoCode)",
+                        path: "/service/setup/hdc/viewdailydata/ [POST]",
+                        category: .scraping,
+                        rawText: detailHTML,
+                        formattedText: merged.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
+                    )
                     return (form.hdoCode, merged)
                 }
             }
@@ -415,5 +474,28 @@ final class IIJAPIClient {
         if let errorCode = try decodeAPIErrorIfNeeded(from: data) {
             throw NSError(domain: "IIJAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "APIエラー: \(errorCode)"])
         }
+    }
+
+    private func recordAPIResponse<T: Encodable>(title: String, path: String, rawData: Data, model: T) {
+        let rawText = DebugPrettyFormatter.utf8String(from: rawData)
+        let formatted = DebugPrettyFormatter.prettyJSONString(model)
+        debugStore.appendResponse(
+            title: title,
+            path: path,
+            category: .api,
+            rawText: rawText,
+            formattedText: formatted
+        )
+    }
+
+    private func recordAPIRawFailure(title: String, path: String, rawData: Data) {
+        let rawText = DebugPrettyFormatter.utf8String(from: rawData)
+        debugStore.appendResponse(
+            title: title,
+            path: path,
+            category: .api,
+            rawText: rawText,
+            formattedText: nil
+        )
     }
 }

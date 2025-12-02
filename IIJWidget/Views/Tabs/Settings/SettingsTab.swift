@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum UsageAlertField: Hashable {
+    case monthly
+    case daily
+}
+
 struct SettingsTab: View {
     @ObservedObject var viewModel: AppViewModel
     let focusedField: FocusState<CredentialsField?>.Binding
@@ -7,7 +12,7 @@ struct SettingsTab: View {
     let presentOnboarding: () -> Void
     @State private var showLogoutConfirmation = false
     @State private var logoutErrorMessage: String?
-    @FocusState private var usageAlertFocused: Bool
+    @FocusState private var usageAlertFocusedField: UsageAlertField?
 
     private var accentColor: Color {
         .accentColor
@@ -48,7 +53,7 @@ struct SettingsTab: View {
                             set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(monthlyThresholdMB: $0)) }
                         ), format: .number)
                         .keyboardType(.numberPad)
-                        .focused($usageAlertFocused)
+                        .focused($usageAlertFocusedField, equals: .monthly)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
                         Text("MBを超えた時警告")
@@ -63,7 +68,7 @@ struct SettingsTab: View {
                             set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(dailyThresholdMB: $0)) }
                         ), format: .number)
                         .keyboardType(.numberPad)
-                        .focused($usageAlertFocused)
+                        .focused($usageAlertFocusedField, equals: .daily)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
                         Text("MBを超えた時警告")
@@ -120,6 +125,22 @@ struct SettingsTab: View {
                 }
             }
 
+            Section(header: Text("デバッグ")) {
+                NavigationLink {
+                    DebugToolsView()
+                } label: {
+                    Label("キャッシュ・レスポンス確認", systemImage: "ladybug")
+                        .foregroundStyle(accentColor)
+                }
+
+                NavigationLink {
+                    RefreshLogView()
+                } label: {
+                    Label("リフレッシュログを確認", systemImage: "doc.text.magnifyingglass")
+                        .foregroundStyle(accentColor)
+                }
+            }
+
             Section {
                 Button(role: .destructive) {
                     showLogoutConfirmation = true
@@ -133,46 +154,56 @@ struct SettingsTab: View {
             }
             }
             .navigationTitle("設定")
-        .toolbar {
-            if usageAlertFocused {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("完了") {
-                        usageAlertFocused = false
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemGroupedBackground))
+            .alert(
+                "保存済みの資格情報を削除してログアウトしますか?",
+                isPresented: $showLogoutConfirmation
+            ) {
+                Button("ログアウト", role: .destructive) {
+                    performLogout()
+                }
+                Button("キャンセル", role: .cancel) {}
+            }
+            .alert(
+                "ログアウトに失敗しました",
+                isPresented: Binding(
+                    get: { logoutErrorMessage != nil },
+                    set: { newValue in
+                        if !newValue {
+                            logoutErrorMessage = nil
+                        }
                     }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    logoutErrorMessage = nil
+                }
+            } message: {
+                if let logoutErrorMessage {
+                    Text(logoutErrorMessage)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if usageAlertFocusedField != nil {
+                    HStack {
+                        Spacer()
+                        Button("完了") {
+                            usageAlertFocusedField = nil
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(accentColor)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.clear)
                 }
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
-        .alert(
-            "保存済みの資格情報を削除してログアウトしますか?",
-            isPresented: $showLogoutConfirmation
-        ) {
-            Button("ログアウト", role: .destructive) {
-                performLogout()
+        .onChange(of: viewModel.usageAlertSettings.isEnabled) { isEnabled in
+            if !isEnabled {
+                usageAlertFocusedField = nil
             }
-            Button("キャンセル", role: .cancel) {}
-        }
-        .alert(
-            "ログアウトに失敗しました",
-            isPresented: Binding(
-                get: { logoutErrorMessage != nil },
-                set: { newValue in
-                    if !newValue {
-                        logoutErrorMessage = nil
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                logoutErrorMessage = nil
-            }
-        } message: {
-            if let logoutErrorMessage {
-                Text(logoutErrorMessage)
-            }
-        }
         }
     }
 

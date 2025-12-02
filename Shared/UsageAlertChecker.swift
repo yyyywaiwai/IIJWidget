@@ -124,15 +124,10 @@ struct UsageAlertChecker {
         }
         
         let calendar = Calendar.current
-        let year = calendar.component(.year, from: today)
-        let month = calendar.component(.month, from: today)
-        let day = calendar.component(.day, from: today)
-        let todayDateString = "\(year)年\(month)月\(day)日"
-        
-
         let totalUsedMB = payload.dailyUsage.reduce(0.0) { serviceSum, service in
-            serviceSum + service.entries.filter { $0.dateLabel == todayDateString }.reduce(0.0) { entrySum, entry in
-                entrySum + (entry.highSpeedMB ?? 0) + (entry.lowSpeedMB ?? 0)
+            serviceSum + service.entries.reduce(0.0) { entrySum, entry in
+                guard isSameDay(as: today, label: entry.dateLabel, calendar: calendar) else { return entrySum }
+                return entrySum + (entry.highSpeedMB ?? 0) + (entry.lowSpeedMB ?? 0)
             }
         }
 
@@ -153,44 +148,94 @@ struct UsageAlertChecker {
 }
 
 private func isSameMonth(as reference: Date, label: String, calendar: Calendar) -> Bool {
-    guard let components = monthComponents(from: label, calendar: calendar),
-          let month = components.month,
-          let year = components.year else {
+    guard var components = dateComponents(from: label, calendar: calendar),
+          let month = components.month else {
         return false
     }
 
-    let refYear = calendar.component(.year, from: reference)
-    let refMonth = calendar.component(.month, from: reference)
-    return refYear == year && refMonth == month
+    components.year = components.year ?? calendar.component(.year, from: reference)
+    components.day = 1
+
+    guard let entryDate = calendar.date(from: components) else { return false }
+    return calendar.isDate(entryDate, equalTo: reference, toGranularity: .month)
 }
 
-private func monthComponents(from label: String, calendar: Calendar) -> DateComponents? {
-    // 抽出できる数値のみを使って年/月を判定する
+private func isSameDay(as reference: Date, label: String, calendar: Calendar) -> Bool {
+    guard var components = dateComponents(from: label, calendar: calendar),
+          let month = components.month,
+          let day = components.day else {
+        return false
+    }
+
+    components.year = components.year ?? calendar.component(.year, from: reference)
+    components.month = month
+    components.day = day
+
+    guard let entryDate = calendar.date(from: components) else { return false }
+    return calendar.isDate(entryDate, inSameDayAs: reference)
+}
+
+private func dateComponents(from label: String, calendar: Calendar) -> DateComponents? {
+    // ラベル内の数字だけを抽出して日付要素を推定する (例: "2024/12/02", "12月2日")
     let regex = try? NSRegularExpression(pattern: "\\d+")
     let nsString = label as NSString
     let matches = regex?.matches(in: label, range: NSRange(location: 0, length: nsString.length)) ?? []
     let segments = matches.compactMap { Int(nsString.substring(with: $0.range)) }
 
+    guard !segments.isEmpty else { return nil }
+
     var year: Int?
     var month: Int?
+    var day: Int?
 
-    if segments.count >= 2 {
+    if segments.count >= 3 {
         if let first = segments.first, first >= 1000 {
             year = first
             month = segments[1]
+            day = segments[2]
         } else if let last = segments.last, last >= 1000 {
             year = last
             month = segments.first
+            day = segments[1]
         }
     }
 
-    if month == nil, let first = segments.first, first <= 12 {
-        month = first
+    if segments.count >= 2 {
+        if year == nil, segments.first ?? 0 >= 1000 {
+            year = segments.first
+            month = segments[1]
+            day = segments.count >= 3 ? segments[2] : nil
+        }
+    }
+
+    if month == nil {
+        month = segments.first
+    }
+    if day == nil, segments.count >= 2 {
+        day = segments[1]
+    }
+
+    guard let month, (1...12).contains(month) else { return nil }
+    if let day, !(1...31).contains(day) {
+        return nil
+    }
+
+    // 月の日数をカレンダーに合わせて簡易チェックする
+    let referenceYear = year ?? calendar.component(.year, from: Date())
+    if let day {
+        var temp = DateComponents()
+        temp.year = referenceYear
+        temp.month = month
+        if let date = calendar.date(from: temp),
+           let validRange = calendar.range(of: .day, in: .month, for: date),
+           !validRange.contains(day) {
+            return nil
+        }
     }
 
     var components = DateComponents()
     components.year = year
     components.month = month
-    // day は不要
-    return (components.year != nil && components.month != nil) ? components : nil
+    components.day = day
+    return components
 }

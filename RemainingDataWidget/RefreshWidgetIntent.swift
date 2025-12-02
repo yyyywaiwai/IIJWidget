@@ -6,6 +6,7 @@ struct RefreshWidgetIntent: AppIntent {
     static var title: LocalizedStringResource { "データ更新" }
     private let refreshService = WidgetRefreshService()
     private let dataStore = WidgetDataStore()
+    private let logStore = RefreshLogStore()
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await updateRefreshingState(true)
@@ -27,10 +28,21 @@ struct RefreshWidgetIntent: AppIntent {
             await MainActor.run {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             }
+            logStore.append(trigger: .widgetManual, result: .success)
             return .result(dialog: IntentDialog("最新の情報を取得しました"))
         } catch WidgetRefreshError.missingCredentials {
+            logStore.append(
+                trigger: .widgetManual,
+                result: .failure,
+                errorDescription: WidgetRefreshError.missingCredentials.localizedDescription
+            )
             return .result(dialog: IntentDialog("アプリで資格情報を入力してください"))
         } catch {
+            logStore.append(
+                trigger: .widgetManual,
+                result: .failure,
+                errorDescription: error.localizedDescription
+            )
             return .result(dialog: IntentDialog("更新に失敗しました: \(error.localizedDescription)"))
         }
     }

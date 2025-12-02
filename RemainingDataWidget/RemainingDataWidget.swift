@@ -13,6 +13,7 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
     private let store = WidgetDataStore()
     private let refreshService = WidgetRefreshService()
     private let accentStore = AccentColorStore()
+    private let logStore = RefreshLogStore()
 
     func placeholder(in context: Context) -> RemainingDataEntry {
         RemainingDataEntry(date: Date(), snapshot: .placeholder, accentColors: accentStore.load())
@@ -63,14 +64,25 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
             
             // Check usage alerts after successful refresh
             await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
+            logStore.append(trigger: .widgetAutomatic, result: .success)
             
             if let snapshot = WidgetSnapshot(payload: outcome.payload, fallback: cached) {
                 return snapshot
             }
         } catch WidgetRefreshError.missingCredentials {
             // 資格情報未設定時は保存済みスナップショットを返す
+            logStore.append(
+                trigger: .widgetAutomatic,
+                result: .failure,
+                errorDescription: WidgetRefreshError.missingCredentials.localizedDescription
+            )
         } catch {
             print("[RemainingDataProvider] refresh failed: \(error.localizedDescription)")
+            logStore.append(
+                trigger: .widgetAutomatic,
+                result: .failure,
+                errorDescription: error.localizedDescription
+            )
         }
         return store.loadSnapshot()
     }
