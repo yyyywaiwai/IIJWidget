@@ -38,14 +38,28 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
         }
 
         let snapshot = await loadSnapshotForTimeline()
-        let entryDate = snapshot?.fetchedAt ?? Date()
-        let entry = RemainingDataEntry(
-            date: entryDate,
+        let now = Date()
+        let accent = resolveAccentColors(from: configuration)
+
+        var entries: [RemainingDataEntry] = []
+        let baseEntry = RemainingDataEntry(
+            date: snapshot?.fetchedAt ?? now,
             snapshot: snapshot,
-            accentColors: resolveAccentColors(from: configuration)
+            accentColors: accent
         )
+        entries.append(baseEntry)
+
+        if let successUntil = snapshot?.successUntil, successUntil > now {
+            let cleared = RemainingDataEntry(
+                date: successUntil,
+                snapshot: snapshot?.updatingSuccessUntil(nil),
+                accentColors: accent
+            )
+            entries.append(cleared)
+        }
+
         let refresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
-        return Timeline(entries: [entry], policy: .after(refresh))
+        return Timeline(entries: entries, policy: .after(refresh))
     }
 
     private func loadSnapshotForTimeline() async -> WidgetSnapshot? {
@@ -59,7 +73,8 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
                 manualCredentials: nil,
                 persistManualCredentials: false,
                 allowSessionReuse: true,
-                allowKeychainFallback: true
+                allowKeychainFallback: true,
+                fetchScope: .topOnly
             )
             
             // Check usage alerts after successful refresh
@@ -90,6 +105,7 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
     private func resolveAccentColors(from configuration: RemainingDataConfigurationIntent) -> AccentColorSettings {
         configuration.resolvedAccentSettings(using: accentStore)
     }
+
 }
 
 struct RemainingDataWidgetEntryView: View {
@@ -140,9 +156,21 @@ struct RemainingDataWidgetEntryView: View {
         entry.snapshot?.isRefreshing == true
     }
 
+    private var showSuccess: Bool {
+        if let until = entry.snapshot?.successUntil {
+            return until > Date()
+        }
+        return false
+    }
+
     private var circularView: some View {
         Group {
-            if isRefreshing {
+            if showSuccess {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .green)
+            } else if isRefreshing {
                 refreshingCircular
             } else if let service = entry.snapshot?.primaryService {
                 Gauge(value: service.remainingGB, in: 0...service.totalCapacityGB) {
@@ -168,7 +196,9 @@ struct RemainingDataWidgetEntryView: View {
     }
 
     private var inlineView: some View {
-        if isRefreshing {
+        if showSuccess {
+            Text("更新完了")
+        } else if isRefreshing {
             Text("更新中")
         } else if let service = entry.snapshot?.primaryService {
             Text("残\(shortGB(service.remainingGB)) / \(shortGB(service.totalCapacityGB))")
@@ -180,7 +210,7 @@ struct RemainingDataWidgetEntryView: View {
     private var rectangularView: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let service = entry.snapshot?.primaryService {
-                Text(isRefreshing ? "更新中..." : service.serviceName)
+                Text(showSuccess ? "更新完了" : (isRefreshing ? "更新中..." : service.serviceName))
                     .font(.caption)
                     .fontWeight(.semibold)
                 FilledLinearMeter(
@@ -202,6 +232,9 @@ struct RemainingDataWidgetEntryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Spacer(minLength: 0)
+                    if showSuccess {
+                        successStatusLabel
+                    }
                     if isRefreshing {
                         refreshStatusLabel
                     }
@@ -231,11 +264,14 @@ struct RemainingDataWidgetEntryView: View {
         cardBackground(alignment: .top) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(isRefreshing ? "更新中..." : (entry.snapshot?.primaryService?.serviceName ?? "IIJmio"))
+                    Text(showSuccess ? "更新OK!" : (isRefreshing ? "更新中..." : (entry.snapshot?.primaryService?.serviceName ?? "IIJmio")))
                         .font(.title3.bold())
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Spacer()
+                    if showSuccess {
+                        successStatusLabel
+                    }
                     if isRefreshing {
                         refreshStatusLabel
                     }
@@ -307,6 +343,18 @@ struct RemainingDataWidgetEntryView: View {
             .background(
                 Capsule()
                     .fill(Color.primary.opacity(0.08))
+            )
+    }
+
+    private var successStatusLabel: some View {
+        Text("更新OK!")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.green)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(Color.green.opacity(0.12))
             )
     }
 

@@ -349,11 +349,18 @@ struct WidgetSnapshot: Codable, Equatable {
     let fetchedAt: Date
     let primaryService: WidgetServiceSnapshot?
     let isRefreshing: Bool
+    let successUntil: Date?
 
-    init(fetchedAt: Date, primaryService: WidgetServiceSnapshot?, isRefreshing: Bool = false) {
+    init(
+        fetchedAt: Date,
+        primaryService: WidgetServiceSnapshot?,
+        isRefreshing: Bool = false,
+        successUntil: Date? = nil
+    ) {
         self.fetchedAt = fetchedAt
         self.primaryService = primaryService
         self.isRefreshing = isRefreshing
+        self.successUntil = successUntil
     }
 
     static let placeholder = WidgetSnapshot(
@@ -364,13 +371,15 @@ struct WidgetSnapshot: Codable, Equatable {
             totalCapacityGB: 20,
             remainingGB: 12.4
         ),
-        isRefreshing: false
+        isRefreshing: false,
+        successUntil: nil
     )
 
     private enum CodingKeys: String, CodingKey {
         case fetchedAt
         case primaryService
         case isRefreshing
+        case successUntil
     }
 
     init(from decoder: Decoder) throws {
@@ -378,6 +387,7 @@ struct WidgetSnapshot: Codable, Equatable {
         fetchedAt = try container.decode(Date.self, forKey: .fetchedAt)
         primaryService = try container.decodeIfPresent(WidgetServiceSnapshot.self, forKey: .primaryService)
         isRefreshing = try container.decodeIfPresent(Bool.self, forKey: .isRefreshing) ?? false
+        successUntil = try container.decodeIfPresent(Date.self, forKey: .successUntil)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -385,10 +395,25 @@ struct WidgetSnapshot: Codable, Equatable {
         try container.encode(fetchedAt, forKey: .fetchedAt)
         try container.encodeIfPresent(primaryService, forKey: .primaryService)
         try container.encode(isRefreshing, forKey: .isRefreshing)
+        try container.encodeIfPresent(successUntil, forKey: .successUntil)
     }
 
     func updatingRefreshingState(_ isRefreshing: Bool) -> WidgetSnapshot {
-        WidgetSnapshot(fetchedAt: fetchedAt, primaryService: primaryService, isRefreshing: isRefreshing)
+        WidgetSnapshot(
+            fetchedAt: fetchedAt,
+            primaryService: primaryService,
+            isRefreshing: isRefreshing,
+            successUntil: successUntil
+        )
+    }
+
+    func updatingSuccessUntil(_ date: Date?) -> WidgetSnapshot {
+        WidgetSnapshot(
+            fetchedAt: fetchedAt,
+            primaryService: primaryService,
+            isRefreshing: isRefreshing,
+            successUntil: date
+        )
     }
 }
 
@@ -412,14 +437,22 @@ struct WidgetDataStore {
     @discardableResult
     func setRefreshingState(_ isRefreshing: Bool) -> Bool {
         if var snapshot = loadSnapshot() {
-            guard snapshot.isRefreshing != isRefreshing else { return false }
             snapshot = snapshot.updatingRefreshingState(isRefreshing)
             save(snapshot: snapshot)
-            return true
         } else {
             let placeholder = WidgetSnapshot(fetchedAt: Date(), primaryService: nil, isRefreshing: isRefreshing)
             save(snapshot: placeholder)
-            return true
+        }
+        return true
+    }
+
+    func setSuccessUntil(_ date: Date?) {
+        if var snapshot = loadSnapshot() {
+            snapshot = snapshot.updatingSuccessUntil(date)
+            save(snapshot: snapshot)
+        } else {
+            let placeholder = WidgetSnapshot(fetchedAt: Date(), primaryService: nil, isRefreshing: false, successUntil: date)
+            save(snapshot: placeholder)
         }
     }
 

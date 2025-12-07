@@ -15,11 +15,19 @@ struct RefreshWidgetIntent: AppIntent {
         }
 
         do {
+            // 成功フラグをリセットしてから開始
+            dataStore.setSuccessUntil(nil)
+            _ = dataStore.setRefreshingState(true)
+            await MainActor.run {
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
+            }
+
             let outcome = try await refreshService.refresh(
                 manualCredentials: nil,
                 persistManualCredentials: false,
                 allowSessionReuse: true,
-                allowKeychainFallback: true
+                allowKeychainFallback: true,
+                fetchScope: .topOnly
             )
             
             // Check usage alerts after successful refresh
@@ -48,7 +56,10 @@ struct RefreshWidgetIntent: AppIntent {
     }
 
     private func updateRefreshingState(_ isRefreshing: Bool) async {
-        guard dataStore.setRefreshingState(isRefreshing) else { return }
+        if isRefreshing {
+            dataStore.setSuccessUntil(nil)
+        }
+        _ = dataStore.setRefreshingState(isRefreshing)
         await MainActor.run {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
         }

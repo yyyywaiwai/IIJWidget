@@ -62,11 +62,35 @@ final class IIJAPIClient {
         }
     }
 
+    func fetchTopOnly(credentials: Credentials) async throws -> MemberTopResponse {
+        guard !credentials.mioId.isEmpty, !credentials.password.isEmpty else {
+            throw IIJAPIClientError.invalidCredentials
+        }
+
+        return try await performWithAutoLogin(credentials: credentials) {
+            try await fetchTop()
+        }
+    }
+
     func fetchUsingExistingSession() async throws -> AggregatePayload {
         do {
             let payload = try await buildAggregatePayload()
             hasValidSession = true
             return payload
+        } catch {
+            invalidateSession()
+            if isAuthenticationError(error) {
+                throw IIJAPIClientError.invalidSession
+            }
+            throw error
+        }
+    }
+
+    func fetchTopUsingExistingSession() async throws -> MemberTopResponse {
+        do {
+            let top = try await fetchTop()
+            hasValidSession = true
+            return top
         } catch {
             invalidateSession()
             if isAuthenticationError(error) {

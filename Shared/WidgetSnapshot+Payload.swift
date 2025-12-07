@@ -23,6 +23,12 @@ extension WidgetSnapshot {
             remainingGB: remaining
         )
         let isRefreshing = fallback?.isRefreshing ?? false
-        self.init(fetchedAt: payload.fetchedAt, primaryService: snapshot, isRefreshing: isRefreshing)
+        let successUntil = fallback?.successUntil
+        self.init(
+            fetchedAt: payload.fetchedAt,
+            primaryService: snapshot,
+            isRefreshing: isRefreshing,
+            successUntil: successUntil
+        )
     }
 }
