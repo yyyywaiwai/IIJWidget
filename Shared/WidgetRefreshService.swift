@@ -44,6 +44,10 @@ struct WidgetRefreshService {
         debugStore.beginCaptureSession()
         defer { debugStore.finalizeCaptureSession() }
 
+        if !allowSessionReuse {
+            apiClient.clearPersistedSession()
+        }
+
         let fallbackPayload = payloadStore.load()
 
         if allowSessionReuse {

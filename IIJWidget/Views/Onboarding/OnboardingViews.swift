@@ -148,6 +148,8 @@ struct OnboardingCredentialSetupStep: View {
     let onFinish: () -> Void
 
     @FocusState private var field: Field?
+    @State private var isSubmitting = false
+    @State private var loginErrorMessage: String?
 
     private enum Field: Hashable {
         case mioId
@@ -190,17 +192,22 @@ struct OnboardingCredentialSetupStep: View {
                 }
 
                 VStack(spacing: 12) {
+                    if let loginErrorMessage {
+                        Text(loginErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Button {
-                        field = nil
-                        viewModel.refreshManually()
-                        onFinish()
+                        Task { await submit() }
                     } label: {
                         Label("保存して取得", systemImage: "arrow.down.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(!viewModel.canSubmit)
+                    .disabled(isSubmitting || !viewModel.canSubmit)
                 }
 
                 Text("ログインを行うと再度この画面は表示されませんが、設定タブからいつでも資格情報を更新できます。")
@@ -208,6 +215,26 @@ struct OnboardingCredentialSetupStep: View {
                     .foregroundStyle(.secondary)
             }
             .padding()
+        }
+    }
+
+    private func submit() async {
+        await MainActor.run {
+            field = nil
+            loginErrorMessage = nil
+            isSubmitting = true
+        }
+
+        let result = await viewModel.refresh(trigger: .manual)
+
+        await MainActor.run {
+            isSubmitting = false
+            switch result {
+            case .success:
+                onFinish()
+            case .failure(let error):
+                loginErrorMessage = error.localizedDescription
+            }
         }
     }
 }

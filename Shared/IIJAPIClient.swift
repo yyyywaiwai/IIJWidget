@@ -139,7 +139,11 @@ final class IIJAPIClient {
             body: try JSONSerialization.data(withJSONObject: payload, options: [])
         )
         if let errorCode = try decodeAPIErrorIfNeeded(from: data) {
-            throw NSError(domain: "IIJAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "ログインエラー: \(errorCode)"])
+            throw NSError(
+                domain: "IIJAPI",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: friendlyMessage(for: errorCode, context: .login)]
+            )
         }
     }
 
@@ -496,7 +500,34 @@ final class IIJAPIClient {
 
     private func throwIfAPIError(_ data: Data) throws {
         if let errorCode = try decodeAPIErrorIfNeeded(from: data) {
-            throw NSError(domain: "IIJAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "APIエラー: \(errorCode)"])
+            throw NSError(
+                domain: "IIJAPI",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: friendlyMessage(for: errorCode, context: .general)]
+            )
+        }
+    }
+
+    private enum APIErrorContext {
+        case login
+        case general
+    }
+
+    private func friendlyMessage(for errorCode: String, context: APIErrorContext) -> String {
+        switch errorCode {
+        case "WARNING_CODE_008", "ERROR_CODE_008":
+            if context == .login {
+                return "ユーザー名またはパスワードが間違っています"
+            }
+        default:
+            break
+        }
+
+        switch context {
+        case .login:
+            return "ログインエラー: \(errorCode)"
+        case .general:
+            return "APIエラー: \(errorCode)"
         }
     }
 

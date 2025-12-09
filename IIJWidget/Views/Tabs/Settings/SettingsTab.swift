@@ -125,28 +125,19 @@ struct SettingsTab: View {
                 }
             }
 
-            Section(header: Text("デバッグ")) {
-                NavigationLink {
-                    DebugToolsView()
-                } label: {
-                    Label("キャッシュ・レスポンス確認", systemImage: "ladybug")
-                        .foregroundStyle(accentColor)
-                }
-
-                NavigationLink {
-                    RefreshLogView()
-                } label: {
-                    Label("リフレッシュログを確認", systemImage: "doc.text.magnifyingglass")
-                        .foregroundStyle(accentColor)
-                }
-            }
+            debugSection
 
             Section {
                 Button(role: .destructive) {
                     showLogoutConfirmation = true
                 } label: {
-                    Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
-                        .frame(maxWidth: .infinity)
+                    Label {
+                        Text("ログアウト")
+                    } icon: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .foregroundStyle(.red)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             } footer: {
                 Text("ログアウトするとキーチェーンの資格情報が削除され、次回起動時に再設定が必要です。")
@@ -223,6 +214,32 @@ struct SettingsTab: View {
             get: { viewModel.accentColors.palette(for: role) },
             set: { viewModel.updateAccentColor(for: role, to: $0) }
         )
+    }
+}
+
+private extension SettingsTab {
+    @ViewBuilder
+    var debugSection: some View {
+        Section(header: Text("デバッグ"), footer: debugFooter) {
+            NavigationLink {
+                DebugToolsView()
+            } label: {
+                Label("キャッシュ・レスポンス確認", systemImage: "ladybug")
+                    .foregroundStyle(accentColor)
+            }
+
+            NavigationLink {
+                RefreshLogView()
+            } label: {
+                Label("リフレッシュログを確認", systemImage: "doc.text.magnifyingglass")
+                    .foregroundStyle(accentColor)
+            }
+        }
+    }
+
+    var debugFooter: some View {
+        Text("作者から調査依頼があった時のみ使用してください。")
+            .font(.footnote)
     }
 }
 

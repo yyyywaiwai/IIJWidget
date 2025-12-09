@@ -151,11 +151,11 @@ final class AppViewModel: ObservableObject {
             return
         }
         lastAutomaticRefresh = now
-        await refresh(trigger: .automatic)
+        _ = await refresh(trigger: .automatic)
     }
 
     func refreshManually() {
-        Task { await refresh(trigger: .manual) }
+        Task { _ = await refresh(trigger: .manual) }
     }
 
     func fetchBillDetail(for entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
@@ -180,19 +180,29 @@ final class AppViewModel: ObservableObject {
         widgetRefreshService.clearSessionArtifacts()
     }
 
-    private func refresh(trigger: RefreshTrigger) async {
-        guard !refreshTaskInFlight else { return }
+    @discardableResult
+    func refresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
+        guard !refreshTaskInFlight else {
+            return .failure(NSError(
+                domain: "AppViewModel",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "前回の更新が進行中です。完了するまでお待ちください。"]
+            ))
+        }
         refreshTaskInFlight = true
         let previousPayload = currentPayload()
         state = .loading(previous: previousPayload)
         defer { refreshTaskInFlight = false }
 
+        let manualCredentials = currentManualCredentials()
+        let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
+
         do {
             let outcome = try await widgetRefreshService.refresh(
-                manualCredentials: currentManualCredentials(),
+                manualCredentials: manualCredentials,
                 persistManualCredentials: true,
-                allowSessionReuse: true,
-                allowKeychainFallback: true
+                allowSessionReuse: !forceManualLogin,
+                allowKeychainFallback: !forceManualLogin
             )
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             state = .loaded(outcome.payload)
@@ -205,6 +215,7 @@ final class AppViewModel: ObservableObject {
                 trigger: trigger.logTrigger,
                 result: .success
             )
+            return .success(())
         } catch {
             state = .failed(error.localizedDescription, lastPayload: previousPayload)
             refreshLogStore.append(
@@ -212,6 +223,7 @@ final class AppViewModel: ObservableObject {
                 result: .failure,
                 errorDescription: error.localizedDescription
             )
+            return .failure(error)
         }
     }
 
