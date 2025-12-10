@@ -280,29 +280,38 @@ private extension Color {
 struct DisplayPreferences: Codable, Equatable {
     var defaultUsageChart: UsageChartDefault
     var showsLowSpeedUsage: Bool
+    var calculateTodayFromRemaining: Bool
 
     static let `default` = DisplayPreferences()
 
-    init(defaultUsageChart: UsageChartDefault = .monthly, showsLowSpeedUsage: Bool = false) {
+    init(
+        defaultUsageChart: UsageChartDefault = .monthly,
+        showsLowSpeedUsage: Bool = false,
+        calculateTodayFromRemaining: Bool = true
+    ) {
         self.defaultUsageChart = defaultUsageChart
         self.showsLowSpeedUsage = showsLowSpeedUsage
+        self.calculateTodayFromRemaining = calculateTodayFromRemaining
     }
 
     private enum CodingKeys: String, CodingKey {
         case defaultUsageChart
         case showsLowSpeedUsage
+        case calculateTodayFromRemaining
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         defaultUsageChart = try container.decodeIfPresent(UsageChartDefault.self, forKey: .defaultUsageChart) ?? .monthly
         showsLowSpeedUsage = try container.decodeIfPresent(Bool.self, forKey: .showsLowSpeedUsage) ?? false
+        calculateTodayFromRemaining = try container.decodeIfPresent(Bool.self, forKey: .calculateTodayFromRemaining) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(defaultUsageChart, forKey: .defaultUsageChart)
         try container.encode(showsLowSpeedUsage, forKey: .showsLowSpeedUsage)
+        try container.encode(calculateTodayFromRemaining, forKey: .calculateTodayFromRemaining)
     }
 }
 

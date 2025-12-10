@@ -14,6 +14,7 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
     private let refreshService = WidgetRefreshService()
     private let accentStore = AccentColorStore()
     private let logStore = RefreshLogStore()
+    private let displayPreferenceStore = DisplayPreferencesStore()
 
     func placeholder(in context: Context) -> RemainingDataEntry {
         RemainingDataEntry(date: Date(), snapshot: .placeholder, accentColors: accentStore.load())
@@ -68,15 +69,10 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
             return cached
         }
 
+        let preferences = displayPreferenceStore.load()
         do {
-            let outcome = try await refreshService.refresh(
-                manualCredentials: nil,
-                persistManualCredentials: false,
-                allowSessionReuse: true,
-                allowKeychainFallback: true,
-                fetchScope: .topOnly
-            )
-            
+            let outcome = try await refreshService.refreshForWidget(calculateTodayFromRemaining: preferences.calculateTodayFromRemaining)
+
             // Check usage alerts after successful refresh
             await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
             logStore.append(trigger: .widgetAutomatic, result: .success)

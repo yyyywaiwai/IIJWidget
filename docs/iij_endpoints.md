@@ -14,7 +14,7 @@ Chrome DevTools で取得した Nuxt バンドル（`/_nuxt/*.js`）と実際の
 | `/customer/bill/detail/` | POST | `billNoList=111005999429&billNoList=...` | HTML (`bill-detail-top`, `bill-detail-table`, `bill-detail-tax`) | 請求タブの「ご請求明細を確認する」。`billNoList` を複数送ると複数計算書が合算される。 | `common.IV0QDYOx.js` |
 | `/api/front/getChatBotPopupToken` | GET | なし | `{ "token": "…", "popupSrc": "…" }` | 画面右下のカラクリチャット呼び出し用トークン。ウィジェットでは不要。 | `chatbot.RO5WKR_d.js` |
 | `/service/setup/hdc/viewmonthlydata/` | HTML (POST で CSRF 更新) | `hdoCode`, `_csrf` を含む form POST | `<table>` 形式で月別の高速/低速利用量 | 純粋な HTML 画面。API エンドポイントは存在せず、スクレイピングかヘッドレスブラウザでの取得が必要。 | 画面本体 |
-| `/service/setup/hdc/viewdailydata/` | HTML (GET + POST) | GET: 画面ロード。POST: `hdoCode`, `_csrf` | GET の `<div class="viewdata">` は直近 4 日分、POST の `<table>` は過去 30 日分 | 4 日プレビューに当日分が含まれる一方、POST 側は更新遅延で当日が欠落するケースがあるため、GET プレビューで得た行を `hdoCode` ごとにマージして利用する。 | 画面本体 / `DataUsageHTMLParser.previewDailyServices` |
+| `/service/setup/hdc/viewdailydata/` | HTML (GET + POST) | GET: 画面ロード。POST: `hdoCode`, `_csrf` | GET の `<div class="viewdata">` は直近 4 日分、POST の `<table>` は過去 30 日分 | 4 日プレビューに当日分が含まれる一方、POST 側は更新遅延で当日が欠落するケースがあるため、GET プレビューで得た行を `hdoCode` ごとにマージして利用する。設定の「当日利用量をデータ残量から計算する」トグルが ON の場合は GET プレビューをスキップし、POST 30 日分のみ取得した上で残量差分から当日分を補完する。 | 画面本体 / `DataUsageHTMLParser.previewDailyServices` |
 
 > **注記**
 > - 各 API は `https://www.iijmio.jp` 配下で提供され、セッションは Cookie ベース (JSESSIONID 等) です。

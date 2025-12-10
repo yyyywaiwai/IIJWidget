@@ -23,6 +23,11 @@ enum IIJAPIClientError: LocalizedError {
     }
 }
 
+enum DailyFetchMode {
+    case mergedPreviewAndTable
+    case tableOnly
+}
+
 struct APIErrorEnvelope: Decodable {
     let error: String?
 }
@@ -52,13 +57,13 @@ final class IIJAPIClient {
         session = URLSession(configuration: config)
     }
 
-    func fetchAll(credentials: Credentials) async throws -> AggregatePayload {
+    func fetchAll(credentials: Credentials, dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable) async throws -> AggregatePayload {
         guard !credentials.mioId.isEmpty, !credentials.password.isEmpty else {
             throw IIJAPIClientError.invalidCredentials
         }
 
         return try await performWithAutoLogin(credentials: credentials) {
-            try await buildAggregatePayload()
+            try await buildAggregatePayload(dailyFetchMode: dailyFetchMode)
         }
     }
 
@@ -72,9 +77,9 @@ final class IIJAPIClient {
         }
     }
 
-    func fetchUsingExistingSession() async throws -> AggregatePayload {
+    func fetchUsingExistingSession(dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable) async throws -> AggregatePayload {
         do {
-            let payload = try await buildAggregatePayload()
+            let payload = try await buildAggregatePayload(dailyFetchMode: dailyFetchMode)
             hasValidSession = true
             return payload
         } catch {
@@ -250,7 +255,7 @@ final class IIJAPIClient {
         return forms.compactMap { servicesByCode[$0.hdoCode] }
     }
 
-    private func fetchDailyUsage() async throws -> [DailyUsageService] {
+    private func fetchDailyUsage(dailyFetchMode: DailyFetchMode) async throws -> [DailyUsageService] {
         let landingData = try await request(path: "/service/setup/hdc/viewdailydata/", method: "GET", contentType: nil)
         let landingHTMLString = String(data: landingData, encoding: .utf8)
         let landingHTML = landingHTMLString ?? DebugPrettyFormatter.utf8String(from: landingData)
@@ -265,7 +270,13 @@ final class IIJAPIClient {
 
         let landingParser = DataUsageHTMLParser(html: landingHTMLString)
         let landing = landingParser.extractLandingPageForms()
-        let previewServices = landingParser.previewDailyServices(for: landing.forms)
+        let previewServices: [String: DailyUsageService]
+        switch dailyFetchMode {
+        case .mergedPreviewAndTable:
+            previewServices = landingParser.previewDailyServices(for: landing.forms)
+        case .tableOnly:
+            previewServices = [:]
+        }
         guard !landing.forms.isEmpty else { return [] }
 
         let forms = landing.forms
@@ -475,12 +486,12 @@ final class IIJAPIClient {
         }
     }
 
-    private func buildAggregatePayload() async throws -> AggregatePayload {
+    private func buildAggregatePayload(dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable) async throws -> AggregatePayload {
         async let top = fetchTop()
         async let bill = fetchBillSummary()
         async let status = fetchServiceStatus()
         async let usage = fetchMonthlyUsage()
-        async let daily = fetchDailyUsage()
+        async let daily = fetchDailyUsage(dailyFetchMode: dailyFetchMode)
         return AggregatePayload(
             fetchedAt: Date(),
             top: try await top,

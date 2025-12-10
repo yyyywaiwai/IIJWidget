@@ -115,6 +115,16 @@ struct SettingsTab: View {
                 }
                 .toggleStyle(.switch)
                 .tint(accentColor)
+
+                Toggle(isOn: Binding(
+                    get: { viewModel.displayPreferences.calculateTodayFromRemaining },
+                    set: { viewModel.updateCalculateTodayFromRemaining($0) }
+                )) {
+                    Text("当日利用量をデータ残量から計算する")
+                        .foregroundStyle(accentColor)
+                }
+                .toggleStyle(.switch)
+                .tint(accentColor)
             }
 
             Section(header: Text("プロジェクト")) {

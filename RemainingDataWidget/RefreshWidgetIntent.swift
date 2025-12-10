@@ -7,6 +7,7 @@ struct RefreshWidgetIntent: AppIntent {
     private let refreshService = WidgetRefreshService()
     private let dataStore = WidgetDataStore()
     private let logStore = RefreshLogStore()
+    private let displayPreferenceStore = DisplayPreferencesStore()
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await updateRefreshingState(true)
@@ -14,6 +15,7 @@ struct RefreshWidgetIntent: AppIntent {
             Task { await updateRefreshingState(false) }
         }
 
+        let preferences = displayPreferenceStore.load()
         do {
             // 成功フラグをリセットしてから開始
             dataStore.setSuccessUntil(nil)
@@ -22,13 +24,7 @@ struct RefreshWidgetIntent: AppIntent {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             }
 
-            let outcome = try await refreshService.refresh(
-                manualCredentials: nil,
-                persistManualCredentials: false,
-                allowSessionReuse: true,
-                allowKeychainFallback: true,
-                fetchScope: .topOnly
-            )
+            let outcome = try await refreshService.refreshForWidget(calculateTodayFromRemaining: preferences.calculateTodayFromRemaining)
             
             // Check usage alerts after successful refresh
             await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)

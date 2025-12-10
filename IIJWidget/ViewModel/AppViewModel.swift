@@ -94,6 +94,12 @@ final class AppViewModel: ObservableObject {
         displayPreferenceStore.save(displayPreferences)
     }
 
+    func updateCalculateTodayFromRemaining(_ newValue: Bool) {
+        guard displayPreferences.calculateTodayFromRemaining != newValue else { return }
+        displayPreferences.calculateTodayFromRemaining = newValue
+        displayPreferenceStore.save(displayPreferences)
+    }
+
     func updateUsageAlertSettings(_ newValue: UsageAlertSettings) {
         guard usageAlertSettings != newValue else { return }
         
@@ -202,7 +208,9 @@ final class AppViewModel: ObservableObject {
                 manualCredentials: manualCredentials,
                 persistManualCredentials: true,
                 allowSessionReuse: !forceManualLogin,
-                allowKeychainFallback: !forceManualLogin
+                allowKeychainFallback: !forceManualLogin,
+                calculateTodayFromRemaining: displayPreferences.calculateTodayFromRemaining,
+                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable
             )
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             state = .loaded(outcome.payload)

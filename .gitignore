@@ -6,6 +6,7 @@ DerivedData/
 !*.xcworkspace/contents.xcworkspacedata
 *.xcuserdata
 *.xcuserstate
+IIJWidget.xcodeproj/project.xcworkspace/xcuserdata/**/*.xcuserstate
 *.moved-aside
 *.pbxuser
 *.mode1v3
