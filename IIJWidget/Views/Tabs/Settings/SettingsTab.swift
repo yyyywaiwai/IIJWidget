@@ -36,15 +36,6 @@ struct SettingsTab: View {
                 .tint(accentColor)
 
                 if viewModel.usageAlertSettings.isEnabled {
-                    Toggle(isOn: Binding(
-                        get: { viewModel.usageAlertSettings.sendNotification },
-                        set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(sendNotification: $0)) }
-                    )) {
-                        Text("通知を送信")
-                            .foregroundStyle(accentColor)
-                    }
-                    .tint(accentColor)
-
                     HStack {
                         Text("今月に")
                             .foregroundStyle(accentColor)

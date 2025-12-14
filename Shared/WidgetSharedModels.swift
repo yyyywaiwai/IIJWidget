@@ -472,26 +472,22 @@ struct WidgetDataStore {
 
 struct UsageAlertSettings: Codable, Equatable {
     var isEnabled: Bool
-    var sendNotification: Bool
     var monthlyThresholdMB: Int?
     var dailyThresholdMB: Int?
 
     static let `default` = UsageAlertSettings(
         isEnabled: false,
-        sendNotification: false,
         monthlyThresholdMB: nil,
         dailyThresholdMB: nil
     )
 
     func updating(
         isEnabled: Bool? = nil,
-        sendNotification: Bool? = nil,
         monthlyThresholdMB: Int?? = nil,
         dailyThresholdMB: Int?? = nil
     ) -> UsageAlertSettings {
         var copy = self
         if let isEnabled { copy.isEnabled = isEnabled }
-        if let sendNotification { copy.sendNotification = sendNotification }
         if let monthlyThresholdMB { copy.monthlyThresholdMB = monthlyThresholdMB }
         if let dailyThresholdMB { copy.dailyThresholdMB = dailyThresholdMB }
         return copy
@@ -514,19 +510,7 @@ struct UsageAlertStore {
 
     func save(_ settings: UsageAlertSettings) {
         let defaults = AppGroup.userDefaults ?? UserDefaults.standard
-        
-        // Check if thresholds have changed
-        let previousSettings = load()
-        let thresholdsChanged = previousSettings.monthlyThresholdMB != settings.monthlyThresholdMB ||
-                                previousSettings.dailyThresholdMB != settings.dailyThresholdMB
-        
-        // Reset notification history if thresholds changed
-        if thresholdsChanged {
-            print("🔄 Thresholds changed, resetting notification history")
-            defaults.removeObject(forKey: "lastMonthlyAlertDate")
-            defaults.removeObject(forKey: "lastDailyAlertDate")
-        }
-        
+
         if let data = try? encoder.encode(settings) {
             defaults.set(data, forKey: key)
         }

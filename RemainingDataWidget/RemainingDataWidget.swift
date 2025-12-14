@@ -73,8 +73,6 @@ struct RemainingDataProvider: AppIntentTimelineProvider {
         do {
             let outcome = try await refreshService.refreshForWidget(calculateTodayFromRemaining: preferences.calculateTodayFromRemaining)
 
-            // Check usage alerts after successful refresh
-            await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
             logStore.append(trigger: .widgetAutomatic, result: .success)
             
             if let snapshot = WidgetSnapshot(payload: outcome.payload, fallback: cached) {

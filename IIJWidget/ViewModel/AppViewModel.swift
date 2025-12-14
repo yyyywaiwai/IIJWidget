@@ -2,7 +2,6 @@ import Combine
 import Foundation
 import SwiftUI
 import WidgetKit
-import UserNotifications
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -34,7 +33,6 @@ final class AppViewModel: ObservableObject {
     private let accentColorStore = AccentColorStore()
     private let displayPreferenceStore = DisplayPreferencesStore()
     private let usageAlertStore = UsageAlertStore()
-    private let usageAlertChecker = UsageAlertChecker()
     private let refreshLogStore = RefreshLogStore()
 
     private var refreshTaskInFlight = false
@@ -102,37 +100,9 @@ final class AppViewModel: ObservableObject {
 
     func updateUsageAlertSettings(_ newValue: UsageAlertSettings) {
         guard usageAlertSettings != newValue else { return }
-        
-        // Check if thresholds changed
-        let monthlyThresholdChanged = usageAlertSettings.monthlyThresholdMB != newValue.monthlyThresholdMB
-        let dailyThresholdChanged = usageAlertSettings.dailyThresholdMB != newValue.dailyThresholdMB
-        
+
         usageAlertSettings = newValue
         usageAlertStore.save(usageAlertSettings)
-        
-        // Reset notification limits if thresholds changed
-        if monthlyThresholdChanged || dailyThresholdChanged {
-            let defaults = AppGroup.userDefaults ?? .standard
-            if monthlyThresholdChanged {
-                defaults.removeObject(forKey: "lastMonthlyAlertDate")
-                print("🔄 Monthly threshold changed, reset notification limit")
-            }
-            if dailyThresholdChanged {
-                defaults.removeObject(forKey: "lastDailyAlertDate")
-                print("🔄 Daily threshold changed, reset notification limit")
-            }
-        }
-        
-        if newValue.isEnabled && newValue.sendNotification {
-            Task {
-                await requestNotificationPermission()
-            }
-        }
-    }
-
-    private func requestNotificationPermission() async {
-        let center = UNUserNotificationCenter.current()
-        try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 
     var canSubmit: Bool {
@@ -216,9 +186,6 @@ final class AppViewModel: ObservableObject {
             state = .loaded(outcome.payload)
             lastLoginSource = outcome.loginSource
             handleCredentialVisibility(after: outcome.loginSource)
-            Task {
-                await usageAlertChecker.checkUsageAlerts(payload: outcome.payload)
-            }
             refreshLogStore.append(
                 trigger: trigger.logTrigger,
                 result: .success
@@ -270,20 +237,6 @@ final class AppViewModel: ObservableObject {
         hasStoredCredentials = (try? credentialStore.load()) != nil
     }
 
-
-
-    func sendTestNotification() {
-        Task {
-            await requestNotificationPermission()
-            let content = UNMutableNotificationContent()
-            content.title = "テスト通知"
-            content.body = "これはテスト通知です。通知機能は正常に動作しています。"
-            content.sound = .default
-
-            let request = UNNotificationRequest(identifier: "test_notification_\(Date().timeIntervalSince1970)", content: content, trigger: nil)
-            try? await UNUserNotificationCenter.current().add(request)
-        }
-    }
 }
 
 private extension AppViewModel.RefreshTrigger {

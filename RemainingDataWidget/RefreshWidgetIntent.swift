@@ -26,9 +26,6 @@ struct RefreshWidgetIntent: AppIntent {
 
             let outcome = try await refreshService.refreshForWidget(calculateTodayFromRemaining: preferences.calculateTodayFromRemaining)
             
-            // Check usage alerts after successful refresh
-            await UsageAlertChecker().checkUsageAlerts(payload: outcome.payload)
-            
             await MainActor.run {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             }

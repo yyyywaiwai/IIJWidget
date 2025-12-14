@@ -1,14 +1,14 @@
 # IIJWidget プロジェクト構造まとめ
 
 ## 概要
-IIJWidget は、IIJ（Internet Initiative Japan）の残データ量、請求額などの情報を表示する iOS/macOS 用 SwiftUI アプリケーションです。WidgetKit 拡張機能（`RemainingDataWidget`）を備え、メインタグゲット（`IIJWidget`）と共有コードを使用したマルチターゲット Xcode プロジェクト構造です。アプリはタブベースのナビゲーション（ホーム、利用状況、請求、設定）、使用量/請求のチャート、利用アラート/通知、セキュアな認証情報保存を備えています。データは API クライアントで取得し、パースして App Groups でウィジェットと共有します。
+IIJWidget は、IIJ（Internet Initiative Japan）の残データ量、請求額などの情報を表示する iOS/macOS 用 SwiftUI アプリケーションです。WidgetKit 拡張機能（`RemainingDataWidget`）を備え、メインタグゲット（`IIJWidget`）と共有コードを使用したマルチターゲット Xcode プロジェクト構造です。アプリはタブベースのナビゲーション（ホーム、利用状況、請求、設定）、使用量/請求のチャート、利用アラート（グラフ強調）、セキュアな認証情報保存を備えています。データは API クライアントで取得し、パースして App Groups でウィジェットと共有します。
 
 - **主な技術スタック**: SwiftUI（UI）、WidgetKit（ウィジェット）、Combine/Async-Await（データフロー）、App Groups（共有データ）、App Groups 対応の Xcode プロジェクト。
 - **高レベルアーキテクチャ**:
   1. **データフロー**: セキュアに認証情報を保存 → IIJAPIClient で生データを取得 → パーサー（DataUsageParser, BillDetailParser）で処理 → モデル（IIJModels, WidgetSharedModels）で構造化 → ViewModel（AppViewModel）で状態管理 → SwiftUI ビューで描画（チャート、タブ、オンboarding）。
   2. **共有レイヤー**: `Shared/` にコアロジック（API、パース、ストレージ、アラート）を配置し、AppGroup.swift と AggregatePayloadStore.swift でアプリ-ウィジェット同期。
   3. **ウィジェット更新**: WidgetRefreshService.swift、RefreshWidgetIntent.swift、TimelineProvider（RemainingDataWidget.swift）でバックグラウンド更新。
-  4. **最近の機能**（コミットから）：アニメーション付きチャート（UsageChartCards.swift）、利用アラート（UsageAlertChecker.swift）、ゼロデータ処理、非正クーポン fallback。
+  4. **最近の機能**（コミットから）：アニメーション付きチャート（UsageChartCards.swift）、しきい値強調（使いすぎアラート）、ゼロデータ処理、非正クーポン fallback。
 - **ビルド/デプロイ**: GitHub Actions で PR 配布（Firebase）と TestFlight リリース。VSCode 統合（.vscode/launch.json）。
 
 ## ディレクトリ構造
@@ -44,7 +44,6 @@ Users/yyyywaiwai/IIJWidget/
 │   ├── CredentialStore.swift   # セキュア認証情報（App Groups）
 │   ├── DataUsageParser.swift
 │   ├── BillDetailParser.swift
-│   ├── UsageAlertChecker.swift # 通知しきい値
 │   ├── ChartDataBuilder.swift  # チャート準備
 │   ├── WidgetRefreshService.swift
 │   ├── AggregatePayloadStore.swift
@@ -95,7 +94,6 @@ Users/yyyywaiwai/IIJWidget/
 - `/Users/yyyywaiwai/IIJWidget/Shared/DataUsageParser.swift`: 利用状況パース。
 - `/Users/yyyywaiwai/IIJWidget/Shared/BillDetailParser.swift`: 請求詳細パース。
 - `/Users/yyyywaiwai/IIJWidget/Shared/CredentialStore.swift`: セキュアストレージ。
-- `/Users/yyyywaiwai/IIJWidget/Shared/UsageAlertChecker.swift`: しきい値ベースのアラート。
 - `/Users/yyyywaiwai/IIJWidget/Shared/WidgetRefreshService.swift`: バックグラウンド更新。
 
 ### UI コンポーネント（SwiftUI）
@@ -116,6 +114,6 @@ Users/yyyywaiwai/IIJWidget/
 - **サービス**: IIJAPIClient.swift、パーサー（非正クーポン fallback）。
 - **UI**: タブビュー、DashboardCard.swift（タブレットアライメント）。
 - **チャート**: UsageChartCards.swift（アニメーション付きチャート）。
-- **通知**: UsageAlertChecker.swift（しきい値追跡システム）。
+- **使いすぎアラート**: UsageChartCards.swift / UsageListTab.swift（しきい値超過時の強調表示）。
 
 追跡ファイル総数: 約50（主に Swift）。Node.js/package.json なし、純粋ネイティブ Swift/iOS。Git リポジトリは `main` ブランチ、最近の修正/機能追加。
