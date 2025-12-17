@@ -85,6 +85,7 @@ private struct ScreenshotProtectedTextRepresentable: UIViewRepresentable {
 private class ScreenshotProtectedLabel: UIView {
     private let secureTextField = UITextField()
     private let label = UILabel()
+    private var labelAdded = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -110,28 +111,36 @@ private class ScreenshotProtectedLabel: UIView {
         ])
 
         DispatchQueue.main.async { [weak self] in
-            self?.addLabelToSecureContainer()
+            guard let self = self else { return }
+            self.secureTextField.layoutIfNeeded()
+            self.addLabelToSecureContainer()
         }
     }
 
     private func addLabelToSecureContainer() {
-        guard let secureContainer = findSecureContainer(in: secureTextField) else { return }
+        guard !labelAdded else { return }
+
+        // セキュアコンテナが見つからない場合は self にフォールバック
+        // （スクショ保護は効かないが、テキストは表示される）
+        let container = findSecureContainer(in: secureTextField) ?? self
 
         label.translatesAutoresizingMaskIntoConstraints = false
-        secureContainer.addSubview(label)
+        container.addSubview(label)
 
         NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: secureContainer.topAnchor),
-            label.bottomAnchor.constraint(equalTo: secureContainer.bottomAnchor),
-            label.leadingAnchor.constraint(equalTo: secureContainer.leadingAnchor),
-            label.trailingAnchor.constraint(equalTo: secureContainer.trailingAnchor)
+            label.topAnchor.constraint(equalTo: container.topAnchor),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
+
+        labelAdded = true
     }
 
     private func findSecureContainer(in view: UIView) -> UIView? {
         for subview in view.subviews {
-            if type(of: subview).description().contains("CanvasView") ||
-               type(of: subview).description().contains("TextLayoutCanvasView") {
+            let className = type(of: subview).description()
+            if className.contains("CanvasView") || className.contains("TextLayoutCanvasView") {
                 return subview
             }
             if let found = findSecureContainer(in: subview) {
