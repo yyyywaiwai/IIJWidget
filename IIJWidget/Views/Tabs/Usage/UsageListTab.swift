@@ -38,60 +38,38 @@ struct UsageListTab: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // タブスイッチャー
-                UsageTabSwitcher(selectedTab: $selectedTab, accentColors: accentColors)
-                    .padding(.horizontal)
-
-                // コンテンツ
-                ZStack {
-                    if selectedTab == .monthly {
-                        monthlyContent
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .leading)),
-                                removal: .opacity.combined(with: .move(edge: .trailing))
-                            ))
-                    } else {
-                        dailyContent
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity.combined(with: .move(edge: .leading))
-                            ))
-                    }
-                }
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedTab)
+        VStack(spacing: 0) {
+            UsageTabSwitcher(selectedTab: $selectedTab, accentColors: accentColors)
                 .padding(.horizontal)
-                .simultaneousGesture(
-                    DragGesture()
-                        .onEnded(handleTabSwipe)
-                )
+                .padding(.top, 16)
+                .padding(.bottom, 12)
 
-                // 回線ステータス
-                if let serviceStatus {
-                    VStack(alignment: .leading, spacing: 12) {
-                        DisclosureGroup(isExpanded: $isStatusExpanded) {
-                            ServiceStatusList(status: serviceStatus)
-                                .padding(.top, 8)
-                        } label: {
-                            SectionHeaderLabel(
-                                title: "回線ステータス",
-                                icon: "dot.radiowaves.left.and.right",
-                                gradientColors: [Color(red: 0.16, green: 0.56, blue: 0.35), Color(red: 0.39, green: 0.77, blue: 0.48)]
-                            )
-                        }
-                    }
-                    .padding()
-                    .background {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    }
-                    .padding(.horizontal)
+            TabView(selection: $selectedTab) {
+                usagePage {
+                    monthlyContent
                 }
+                .tag(UsageTab.monthly)
+
+                usagePage {
+                    dailyContent
+                }
+                .tag(UsageTab.daily)
             }
-            .padding(.vertical)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(.systemGroupedBackground))
+    }
+
+    private func usagePage<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                content()
+                serviceStatusSection
+            }
+            .padding(.horizontal)
+            .padding(.vertical)
+        }
     }
 
     private var monthlyContent: some View {
@@ -128,19 +106,25 @@ struct UsageListTab: View {
         }
     }
 
-    private func handleTabSwipe(_ value: DragGesture.Value) {
-        let horizontal = value.predictedEndTranslation.width
-        let vertical = value.predictedEndTranslation.height
-        guard abs(horizontal) > abs(vertical) else { return }
-        guard abs(horizontal) > 60 else { return }
-
-        if horizontal < 0, selectedTab == .monthly {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                selectedTab = .daily
+    @ViewBuilder
+    private var serviceStatusSection: some View {
+        if let serviceStatus {
+            VStack(alignment: .leading, spacing: 12) {
+                DisclosureGroup(isExpanded: $isStatusExpanded) {
+                    ServiceStatusList(status: serviceStatus)
+                        .padding(.top, 8)
+                } label: {
+                    SectionHeaderLabel(
+                        title: "回線ステータス",
+                        icon: "dot.radiowaves.left.and.right",
+                        gradientColors: [Color(red: 0.16, green: 0.56, blue: 0.35), Color(red: 0.39, green: 0.77, blue: 0.48)]
+                    )
+                }
             }
-        } else if horizontal > 0, selectedTab == .daily {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                selectedTab = .monthly
+            .padding()
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
             }
         }
     }
