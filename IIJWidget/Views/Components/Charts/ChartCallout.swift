@@ -9,29 +9,39 @@ struct ChartCallout: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(title)
-                .font(.caption.bold())
+                .font(.system(.caption2, design: .rounded, weight: .medium))
+                .foregroundStyle(.secondary)
             Text(valueText)
-                .font(.caption2)
+                .font(.system(.callout, design: .rounded, weight: .bold))
+                .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(backgroundColor)
-                .shadow(color: shadowColor, radius: 8, y: 4)
-        )
-    }
-
-    private var backgroundColor: Color {
-        if colorScheme == .light {
-            return Color(uiColor: .systemBackground).opacity(0.95)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(colorScheme == .dark ? 0.2 : 0.7),
+                                    Color.white.opacity(colorScheme == .dark ? 0.05 : 0.25)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .shadow(color: shadowColor, radius: 12, x: 0, y: 6)
+                .shadow(color: shadowColor.opacity(0.5), radius: 3, x: 0, y: 2)
         }
-        return Color(uiColor: .secondarySystemBackground).opacity(0.85)
     }
 
     private var shadowColor: Color {
-        colorScheme == .light ? Color.black.opacity(0.08) : Color.black.opacity(0.3)
+        colorScheme == .light ? Color.black.opacity(0.1) : Color.black.opacity(0.4)
     }
 }

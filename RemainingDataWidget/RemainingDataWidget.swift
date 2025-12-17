@@ -223,7 +223,7 @@ struct RemainingDataWidgetEntryView: View {
 
     private var smallView: some View {
         cardBackground(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Spacer(minLength: 0)
                     if showSuccess {
@@ -235,19 +235,30 @@ struct RemainingDataWidgetEntryView: View {
                     refreshButton
                 }
                 if isRefreshing {
-                    Text("更新中...")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
+                    VStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("更新中")
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 100, alignment: .center)
                 } else if let service = entry.snapshot?.primaryService {
                     HStack {
                         Spacer(minLength: 0)
-                        circularMeter(for: service, size: 96)
+                        circularMeter(for: service, size: 100)
                         Spacer(minLength: 0)
                     }
                 } else {
-                    Text("データ未取得")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
+                    VStack(spacing: 6) {
+                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.tertiary)
+                        Text("データ未取得")
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 100, alignment: .center)
                 }
                 Spacer(minLength: 0)
             }
@@ -256,12 +267,23 @@ struct RemainingDataWidgetEntryView: View {
 
     private var mediumView: some View {
         cardBackground(alignment: .top) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text(showSuccess ? "更新OK!" : (isRefreshing ? "更新中..." : (entry.snapshot?.primaryService?.serviceName ?? "IIJmio")))
-                        .font(.title3.bold())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "simcard.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: ringColors(for: entry.snapshot?.primaryService.map { remainingRatio(for: $0) } ?? 0.5),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        Text(showSuccess ? "更新完了" : (isRefreshing ? "更新中..." : (entry.snapshot?.primaryService?.serviceName ?? "IIJmio")))
+                            .font(.system(.headline, design: .rounded, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                     Spacer()
                     if showSuccess {
                         successStatusLabel
@@ -271,27 +293,49 @@ struct RemainingDataWidgetEntryView: View {
                     }
                     refreshButton
                 }
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
                         if let service = entry.snapshot?.primaryService {
-                            Text("\(detailedGB(service.remainingGB)) / \(detailedGB(service.totalCapacityGB))")
-                                .font(.headline)
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(service.remainingGB, specifier: "%.2f")")
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                Text("GB")
+                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .monospacedDigit()
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                                Text(formatted(date: entry.snapshot?.fetchedAt ?? entry.date))
+                                    .font(.system(.caption2, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
                         } else {
-                            Text("データ未取得")
-                                .font(.headline)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("データ未取得")
+                                    .font(.system(.headline, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Text("アプリで最新取得を実行")
+                                    .font(.system(.caption2, design: .rounded))
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
-                        Text("更新 \(formatted(date: entry.snapshot?.fetchedAt ?? entry.date))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     if let service = entry.snapshot?.primaryService {
-                        circularMeter(for: service, size: 90)
+                        circularMeter(for: service, size: 88)
                     } else {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.title)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 90, height: 90)
+                        ZStack {
+                            Circle()
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 10)
+                            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(width: 88, height: 88)
                     }
                 }
             }
@@ -300,27 +344,39 @@ struct RemainingDataWidgetEntryView: View {
 
     private func circularMeter(for service: WidgetServiceSnapshot, size: CGFloat, lineWidth: CGFloat = 10) -> some View {
         let ratio = min(max(service.remainingGB / service.totalCapacityGB, 0), 1)
+        let colors = ringColors(for: ratio)
+        let adjustedLineWidth = size * 0.11
+
         return ZStack {
+            // 背景トラック
             Circle()
-                .stroke(Color.white.opacity(0.2), lineWidth: lineWidth)
+                .stroke(Color.primary.opacity(0.08), lineWidth: adjustedLineWidth)
+
+            // プログレスリング
             Circle()
-                .trim(from: 0, to: CGFloat(max(0.05, 1 - service.usedRatio)))
+                .trim(from: 0, to: CGFloat(max(0.03, ratio)))
                 .stroke(
-                    AngularGradient(colors: ringColors(for: ratio), center: .center),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    AngularGradient(
+                        gradient: Gradient(colors: colors + [colors.first ?? .blue]),
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360)
+                    ),
+                    style: StrokeStyle(lineWidth: adjustedLineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-            VStack(spacing: 2) {
+
+            // 中央テキスト
+            VStack(spacing: 1) {
                 if isRefreshing {
-                    Text("更新中...")
-                        .font(.system(size: size * 0.2, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
+                    ProgressView()
+                        .scaleEffect(0.6)
                 } else {
                     Text(shortGB(service.remainingGB))
-                        .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
+                        .font(.system(size: size * 0.22, weight: .bold, design: .rounded))
+                        .monospacedDigit()
                     Text("残")
-                        .font(.caption2)
+                        .font(.system(size: size * 0.11, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -329,27 +385,44 @@ struct RemainingDataWidgetEntryView: View {
     }
 
     private var refreshStatusLabel: some View {
-        Text("更新中...")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(Color.primary.opacity(0.08))
-            )
+        HStack(spacing: 4) {
+            ProgressView()
+                .scaleEffect(0.5)
+                .frame(width: 12, height: 12)
+            Text("更新中")
+                .font(.system(.caption2, design: .rounded, weight: .semibold))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                )
+        )
     }
 
     private var successStatusLabel: some View {
-        Text("更新OK!")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.green)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(Color.green.opacity(0.12))
-            )
+        HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 10))
+            Text("完了")
+                .font(.system(.caption2, design: .rounded, weight: .semibold))
+        }
+        .foregroundStyle(.green)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(Color.green.opacity(0.12))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.green.opacity(0.3), lineWidth: 0.5)
+                )
+        )
     }
 
     @ViewBuilder
@@ -358,10 +431,24 @@ struct RemainingDataWidgetEntryView: View {
             Button(intent: RefreshWidgetIntent()) {
                 RefreshSymbol(isRefreshing: isRefreshing)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .padding(6)
+            .background(
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    )
+            )
         } else {
             LegacyRefreshSymbol()
                 .foregroundStyle(.secondary)
+                .padding(6)
+                .background(
+                    Circle()
+                        .fill(Color.primary.opacity(0.06))
+                )
         }
     }
 
@@ -411,11 +498,23 @@ private struct FilledLinearMeter: View {
         GeometryReader { proxy in
             let clamped = min(max(ratio, 0), 1)
             let width = proxy.size.width * clamped
-            Capsule()
-                .fill(Color.white.opacity(0.2))
-            Capsule()
-                .fill(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
-                .frame(width: max(width, proxy.size.height))
+
+            ZStack(alignment: .leading) {
+                // 背景トラック
+                Capsule()
+                    .fill(Color.white.opacity(0.15))
+
+                // プログレスバー
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: colors,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(width, proxy.size.height))
+            }
         }
         .compositingGroup()
         .clipped()

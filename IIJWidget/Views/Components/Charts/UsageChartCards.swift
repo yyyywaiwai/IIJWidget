@@ -67,6 +67,8 @@ struct MonthlyUsageChartCard: View {
                         endPoint: .top
                     )
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .opacity(selectedIndex == entry.index ? 1.0 : 0.85)
             }
 
             if let selectedIndex, let selectedPoint {
@@ -75,8 +77,8 @@ struct MonthlyUsageChartCard: View {
                     yStart: .value("最小", 0),
                     yEnd: .value("選択値", selectedPoint.value)
                 )
-                    .lineStyle(.init(lineWidth: 1, dash: [4]))
-                    .foregroundStyle(.secondary)
+                    .lineStyle(.init(lineWidth: 1.5, dash: [4, 3]))
+                    .foregroundStyle(.secondary.opacity(0.6))
             }
         }
         .chartYAxis {
@@ -333,6 +335,8 @@ struct DailyUsageChartCard: View {
                         endPoint: .top
                     )
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .opacity(selectedIndex == entry.index ? 1.0 : 0.85)
             }
 
             if let selectedIndex, let selectedPoint {
@@ -341,8 +345,8 @@ struct DailyUsageChartCard: View {
                     yStart: .value("最小", 0),
                     yEnd: .value("選択値", selectedPoint.value)
                 )
-                    .lineStyle(.init(lineWidth: 1, dash: [4]))
-                    .foregroundStyle(.secondary)
+                    .lineStyle(.init(lineWidth: 1.5, dash: [4, 3]))
+                    .foregroundStyle(.secondary.opacity(0.6))
             }
         }
         .chartYAxis {
