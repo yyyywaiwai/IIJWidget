@@ -116,6 +116,16 @@ struct SettingsTab: View {
                 }
                 .toggleStyle(.switch)
                 .tint(accentColor)
+
+                Toggle(isOn: Binding(
+                    get: { viewModel.displayPreferences.hidePhoneOnScreenshot },
+                    set: { viewModel.updateHidePhoneOnScreenshot($0) }
+                )) {
+                    Text("スクショ時に電話番号を隠す")
+                        .foregroundStyle(accentColor)
+                }
+                .toggleStyle(.switch)
+                .tint(accentColor)
             }
 
             Section(header: Text("プロジェクト")) {

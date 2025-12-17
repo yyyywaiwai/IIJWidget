@@ -98,6 +98,12 @@ final class AppViewModel: ObservableObject {
         displayPreferenceStore.save(displayPreferences)
     }
 
+    func updateHidePhoneOnScreenshot(_ newValue: Bool) {
+        guard displayPreferences.hidePhoneOnScreenshot != newValue else { return }
+        displayPreferences.hidePhoneOnScreenshot = newValue
+        displayPreferenceStore.save(displayPreferences)
+    }
+
     func updateUsageAlertSettings(_ newValue: UsageAlertSettings) {
         guard usageAlertSettings != newValue else { return }
 

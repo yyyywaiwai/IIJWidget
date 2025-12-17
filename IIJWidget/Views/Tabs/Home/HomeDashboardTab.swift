@@ -5,6 +5,7 @@ struct HomeDashboardTab: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let defaultUsageChart: UsageChartDefault
+    let hidePhoneOnScreenshot: Bool
     let saveDefaultUsageChart: (UsageChartDefault) -> Void
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -25,7 +26,8 @@ struct HomeDashboardTab: View {
                         HomeOverviewHeader(
                             serviceInfoList: payload.top.serviceInfoList,
                             latestBillAmount: payload.bill.latestEntry?.plainAmountText,
-                            accentColors: accentColors
+                            accentColors: accentColors,
+                            hidePhoneOnScreenshot: hidePhoneOnScreenshot
                         )
 
                         LazyVGrid(columns: gridColumns, spacing: 16) {
@@ -192,6 +194,7 @@ struct HomeOverviewHeader: View {
     let serviceInfoList: [MemberTopResponse.ServiceInfo]
     let latestBillAmount: String?
     let accentColors: AccentColorSettings
+    let hidePhoneOnScreenshot: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -213,7 +216,8 @@ struct HomeOverviewHeader: View {
                     ServiceInfoCard(
                         info: info,
                         latestBillAmount: latestBillAmount,
-                        accentColors: accentColors
+                        accentColors: accentColors,
+                        hidePhoneOnScreenshot: hidePhoneOnScreenshot
                     )
                 }
             }
@@ -226,6 +230,7 @@ struct ServiceInfoCard: View {
     let info: MemberTopResponse.ServiceInfo
     let latestBillAmount: String?
     let accentColors: AccentColorSettings
+    let hidePhoneOnScreenshot: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     private var remainingRatio: Double {
@@ -256,9 +261,12 @@ struct ServiceInfoCard: View {
                             Image(systemName: "phone.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
-                            Text(info.phoneLabel)
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(.secondary)
+                            ScreenshotProtectedText(
+                                info.phoneLabel,
+                                font: .subheadline,
+                                foregroundStyle: .secondary,
+                                isProtected: hidePhoneOnScreenshot
+                            )
                         }
 
                         if let total = info.totalCapacity {

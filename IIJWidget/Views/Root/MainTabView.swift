@@ -15,6 +15,7 @@ struct MainTabView: View {
                 accentColors: viewModel.accentColors,
                 usageAlertSettings: viewModel.usageAlertSettings,
                 defaultUsageChart: viewModel.displayPreferences.defaultUsageChart,
+                hidePhoneOnScreenshot: viewModel.displayPreferences.hidePhoneOnScreenshot,
                 saveDefaultUsageChart: viewModel.updateDefaultUsageChart
             )
                 .tabItem { Label(AppSection.home.title, systemImage: AppSection.home.iconName) }

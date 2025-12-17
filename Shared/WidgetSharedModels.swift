@@ -401,23 +401,27 @@ struct DisplayPreferences: Codable, Equatable {
     var defaultUsageChart: UsageChartDefault
     var showsLowSpeedUsage: Bool
     var calculateTodayFromRemaining: Bool
+    var hidePhoneOnScreenshot: Bool
 
     static let `default` = DisplayPreferences()
 
     init(
         defaultUsageChart: UsageChartDefault = .monthly,
         showsLowSpeedUsage: Bool = false,
-        calculateTodayFromRemaining: Bool = true
+        calculateTodayFromRemaining: Bool = true,
+        hidePhoneOnScreenshot: Bool = true
     ) {
         self.defaultUsageChart = defaultUsageChart
         self.showsLowSpeedUsage = showsLowSpeedUsage
         self.calculateTodayFromRemaining = calculateTodayFromRemaining
+        self.hidePhoneOnScreenshot = hidePhoneOnScreenshot
     }
 
     private enum CodingKeys: String, CodingKey {
         case defaultUsageChart
         case showsLowSpeedUsage
         case calculateTodayFromRemaining
+        case hidePhoneOnScreenshot
     }
 
     init(from decoder: Decoder) throws {
@@ -425,6 +429,7 @@ struct DisplayPreferences: Codable, Equatable {
         defaultUsageChart = try container.decodeIfPresent(UsageChartDefault.self, forKey: .defaultUsageChart) ?? .monthly
         showsLowSpeedUsage = try container.decodeIfPresent(Bool.self, forKey: .showsLowSpeedUsage) ?? false
         calculateTodayFromRemaining = try container.decodeIfPresent(Bool.self, forKey: .calculateTodayFromRemaining) ?? true
+        hidePhoneOnScreenshot = try container.decodeIfPresent(Bool.self, forKey: .hidePhoneOnScreenshot) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -432,6 +437,7 @@ struct DisplayPreferences: Codable, Equatable {
         try container.encode(defaultUsageChart, forKey: .defaultUsageChart)
         try container.encode(showsLowSpeedUsage, forKey: .showsLowSpeedUsage)
         try container.encode(calculateTodayFromRemaining, forKey: .calculateTodayFromRemaining)
+        try container.encode(hidePhoneOnScreenshot, forKey: .hidePhoneOnScreenshot)
     }
 }
 
