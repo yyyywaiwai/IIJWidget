@@ -24,6 +24,7 @@ struct MainTabView: View {
                 monthly: payload?.monthlyUsage ?? [],
                 daily: payload?.dailyUsage ?? [],
                 serviceStatus: payload?.serviceStatus,
+                accentColors: viewModel.accentColors,
                 usageAlertSettings: viewModel.usageAlertSettings,
                 showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage
             )
