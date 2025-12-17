@@ -21,7 +21,7 @@ struct ScreenshotProtectedText: View {
 
     var body: some View {
         if isProtected {
-            SecureTextFieldRepresentable(
+            ScreenshotProtectedTextRepresentable(
                 text: text,
                 font: font,
                 foregroundStyle: foregroundStyle
@@ -35,27 +35,21 @@ struct ScreenshotProtectedText: View {
     }
 }
 
-private struct SecureTextFieldRepresentable: UIViewRepresentable {
+private struct ScreenshotProtectedTextRepresentable: UIViewRepresentable {
     let text: String
     let font: Font
     let foregroundStyle: Color
 
-    func makeUIView(context: Context) -> UITextField {
-        let textField = UITextField()
-        textField.isSecureTextEntry = true
-        textField.isUserInteractionEnabled = false
-        textField.borderStyle = .none
-        textField.backgroundColor = .clear
-        textField.setContentHuggingPriority(.required, for: .horizontal)
-        textField.setContentHuggingPriority(.required, for: .vertical)
-        textField.setContentCompressionResistancePriority(.required, for: .horizontal)
-        return textField
+    func makeUIView(context: Context) -> ScreenshotProtectedLabel {
+        let view = ScreenshotProtectedLabel()
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        view.setContentHuggingPriority(.required, for: .vertical)
+        view.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return view
     }
 
-    func updateUIView(_ uiView: UITextField, context: Context) {
-        uiView.text = text
-        uiView.font = uiFont(from: font)
-        uiView.textColor = UIColor(foregroundStyle)
+    func updateUIView(_ uiView: ScreenshotProtectedLabel, context: Context) {
+        uiView.update(text: text, font: uiFont(from: font), textColor: UIColor(foregroundStyle))
     }
 
     private func uiFont(from font: Font) -> UIFont {
@@ -85,5 +79,79 @@ private struct SecureTextFieldRepresentable: UIViewRepresentable {
         default:
             return UIFont.preferredFont(forTextStyle: .subheadline)
         }
+    }
+}
+
+private class ScreenshotProtectedLabel: UIView {
+    private let secureTextField = UITextField()
+    private let label = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+
+    private func setupView() {
+        secureTextField.isSecureTextEntry = true
+        secureTextField.isUserInteractionEnabled = false
+        secureTextField.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(secureTextField)
+
+        NSLayoutConstraint.activate([
+            secureTextField.topAnchor.constraint(equalTo: topAnchor),
+            secureTextField.bottomAnchor.constraint(equalTo: bottomAnchor),
+            secureTextField.leadingAnchor.constraint(equalTo: leadingAnchor),
+            secureTextField.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+
+        DispatchQueue.main.async { [weak self] in
+            self?.addLabelToSecureContainer()
+        }
+    }
+
+    private func addLabelToSecureContainer() {
+        guard let secureContainer = findSecureContainer(in: secureTextField) else { return }
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        secureContainer.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: secureContainer.topAnchor),
+            label.bottomAnchor.constraint(equalTo: secureContainer.bottomAnchor),
+            label.leadingAnchor.constraint(equalTo: secureContainer.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: secureContainer.trailingAnchor)
+        ])
+    }
+
+    private func findSecureContainer(in view: UIView) -> UIView? {
+        for subview in view.subviews {
+            if type(of: subview).description().contains("CanvasView") ||
+               type(of: subview).description().contains("TextLayoutCanvasView") {
+                return subview
+            }
+            if let found = findSecureContainer(in: subview) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    func update(text: String, font: UIFont, textColor: UIColor) {
+        secureTextField.text = text
+        secureTextField.font = font
+        label.text = text
+        label.font = font
+        label.textColor = textColor
+
+        invalidateIntrinsicContentSize()
+    }
+
+    override var intrinsicContentSize: CGSize {
+        label.intrinsicContentSize
     }
 }
