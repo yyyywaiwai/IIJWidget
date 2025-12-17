@@ -7,6 +7,7 @@ struct UsageListTab: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
+    let hidePhoneOnScreenshot: Bool
 
     @State private var selectedTab: UsageTab = .monthly
     @State private var isStatusExpanded = false
@@ -83,7 +84,8 @@ struct UsageListTab: View {
                     services: monthly,
                     accentColors: accentColors,
                     usageAlertSettings: usageAlertSettings,
-                    showsLowSpeedUsage: showsLowSpeedUsage
+                    showsLowSpeedUsage: showsLowSpeedUsage,
+                    hidePhoneOnScreenshot: hidePhoneOnScreenshot
                 )
             }
         }
@@ -100,7 +102,8 @@ struct UsageListTab: View {
                     services: daily,
                     accentColors: accentColors,
                     usageAlertSettings: usageAlertSettings,
-                    showsLowSpeedUsage: showsLowSpeedUsage
+                    showsLowSpeedUsage: showsLowSpeedUsage,
+                    hidePhoneOnScreenshot: hidePhoneOnScreenshot
                 )
             }
         }
@@ -228,6 +231,7 @@ struct MonthlyUsageSection: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
+    let hidePhoneOnScreenshot: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -236,7 +240,8 @@ struct MonthlyUsageSection: View {
                     service: service,
                     accentColors: accentColors,
                     usageAlertSettings: usageAlertSettings,
-                    showsLowSpeedUsage: showsLowSpeedUsage
+                    showsLowSpeedUsage: showsLowSpeedUsage,
+                    hidePhoneOnScreenshot: hidePhoneOnScreenshot
                 )
             }
         }
@@ -248,6 +253,7 @@ struct MonthlyUsageServiceCard: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
+    let hidePhoneOnScreenshot: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -267,9 +273,12 @@ struct MonthlyUsageServiceCard: View {
                     .font(.system(.subheadline, design: .rounded, weight: .bold))
             }
             if let detail = service.titleDetail {
-                Text(detail)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
+                ScreenshotProtectedText(
+                    detail,
+                    font: .caption,
+                    foregroundStyle: .secondary,
+                    isProtected: hidePhoneOnScreenshot
+                )
             }
 
             VStack(spacing: 0) {
@@ -320,6 +329,7 @@ struct DailyUsageSection: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
+    let hidePhoneOnScreenshot: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -328,7 +338,8 @@ struct DailyUsageSection: View {
                     service: service,
                     accentColors: accentColors,
                     usageAlertSettings: usageAlertSettings,
-                    showsLowSpeedUsage: showsLowSpeedUsage
+                    showsLowSpeedUsage: showsLowSpeedUsage,
+                    hidePhoneOnScreenshot: hidePhoneOnScreenshot
                 )
             }
         }
@@ -340,6 +351,7 @@ struct DailyUsageServiceCard: View {
     let accentColors: AccentColorSettings
     let usageAlertSettings: UsageAlertSettings
     let showsLowSpeedUsage: Bool
+    let hidePhoneOnScreenshot: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -359,9 +371,12 @@ struct DailyUsageServiceCard: View {
                     .font(.system(.subheadline, design: .rounded, weight: .bold))
             }
             if let detail = service.titleDetail {
-                Text(detail)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
+                ScreenshotProtectedText(
+                    detail,
+                    font: .caption,
+                    foregroundStyle: .secondary,
+                    isProtected: hidePhoneOnScreenshot
+                )
             }
 
             VStack(spacing: 0) {

@@ -27,7 +27,8 @@ struct MainTabView: View {
                 serviceStatus: payload?.serviceStatus,
                 accentColors: viewModel.accentColors,
                 usageAlertSettings: viewModel.usageAlertSettings,
-                showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage
+                showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage,
+                hidePhoneOnScreenshot: viewModel.displayPreferences.hidePhoneOnScreenshot
             )
             .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }
             .tag(AppSection.usage)
