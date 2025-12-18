@@ -124,6 +124,8 @@ final class AppViewModel: ObservableObject {
             return "キーチェーンの資格情報でログインしました"
         case .manual:
             return "入力した資格情報でログインしました"
+        case .mock:
+            return "モックデータでプレビュー中です"
         }
     }
 
@@ -239,6 +241,12 @@ final class AppViewModel: ObservableObject {
             }
         case .manual:
             credentialFieldsHidden = false
+        case .mock:
+            credentialFieldsHidden = true
+            if let stored = try? credentialStore.load() {
+                mioId = stored.mioId
+                password = stored.password
+            }
         }
         hasStoredCredentials = (try? credentialStore.load()) != nil
     }

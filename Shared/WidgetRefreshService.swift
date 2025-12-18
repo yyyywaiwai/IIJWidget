@@ -16,6 +16,7 @@ struct WidgetRefreshService {
         case sessionCookie
         case keychain
         case manual
+        case mock
     }
 
     enum FetchScope {
@@ -77,11 +78,20 @@ struct WidgetRefreshService {
         debugStore.beginCaptureSession()
         defer { debugStore.finalizeCaptureSession() }
 
+        let fallbackPayload = payloadStore.load()
+
+        if let mock = mockOutcome(
+            manualCredentials: manualCredentials,
+            persistManualCredentials: persistManualCredentials,
+            allowKeychainFallback: allowKeychainFallback
+        ) {
+            return mock
+        }
+
         if !allowSessionReuse {
             apiClient.clearPersistedSession()
         }
 
-        let fallbackPayload = payloadStore.load()
         let resolvedDailyMode: DailyFetchMode = dailyFetchMode
             ?? (calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable)
 
@@ -142,6 +152,27 @@ struct WidgetRefreshService {
             )
         }
         return RefreshOutcome(payload: payload, loginSource: source)
+    }
+
+    private func mockOutcome(
+        manualCredentials: Credentials?,
+        persistManualCredentials: Bool,
+        allowKeychainFallback: Bool
+    ) -> RefreshOutcome? {
+        if let manualCredentials, MockPayloadProvider.isMockCredentials(manualCredentials) {
+            if persistManualCredentials {
+                try? credentialStore.save(manualCredentials)
+            }
+            return finalize(payload: MockPayloadProvider.aggregatePayload(), source: .mock)
+        }
+
+        if allowKeychainFallback,
+           let stored = try? credentialStore.load(),
+           MockPayloadProvider.isMockCredentials(stored) {
+            return finalize(payload: MockPayloadProvider.aggregatePayload(), source: .mock)
+        }
+
+        return nil
     }
 
     func fetchBillDetail(entry: BillSummaryResponse.BillEntry, manualCredentials: Credentials? = nil) async throws -> BillDetailResponse {

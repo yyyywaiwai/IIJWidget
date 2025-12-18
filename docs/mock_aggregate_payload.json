@@ -1,0 +1,193 @@
+{
+  "fetchedAt": "2024-05-20T12:00:00Z",
+  "top": {
+    "serviceInfoList": [
+      {
+        "dataShareNotCovered": false,
+        "serviceCode": "hdo0123456",
+        "totalCapacity": 20,
+        "dataShareExistence": true,
+        "planName": "ギガプラン 20GB (音声)",
+        "chargePlan": "Giga Plan",
+        "serviceName": "メイン回線",
+        "phoneNo": "080-1234-5678",
+        "couponData": [
+          {
+            "adjustmentCoupon": false,
+            "sequenceNo": 1,
+            "month": "202405",
+            "couponValue": 14.3
+          }
+        ]
+      }
+    ],
+    "billSummary": {
+      "amount": "2,980",
+      "miowari": "-",
+      "month": "202404"
+    },
+    "hasVouchers": false,
+    "usagePeriod": "2024/05/01 - 2024/05/31",
+    "prefixList": ["hdo"]
+  },
+  "bill": {
+    "billList": [
+      {
+        "billNoList": ["BILL-MOCK-001"],
+        "month": "202404",
+        "totalAmount": 2980,
+        "usedPoint": 0,
+        "isUnpaid": false,
+        "id": "BILL-MOCK-001"
+      },
+      {
+        "billNoList": ["BILL-MOCK-002"],
+        "month": "202403",
+        "totalAmount": 3100,
+        "usedPoint": 200,
+        "isUnpaid": false,
+        "id": "BILL-MOCK-002"
+      }
+    ],
+    "isVoiceSim": true,
+    "isImt": false
+  },
+  "serviceStatus": {
+    "serviceInfoList": [
+      {
+        "simInfoList": [
+          {
+            "simType": "Voice+Data",
+            "status": "開通済み",
+            "id": "Voice+Data開通済み"
+          }
+        ],
+        "serviceCodePrefix": "hdo",
+        "stopDate": null,
+        "planCode": "giga20",
+        "isBic": false,
+        "status": "ご利用中",
+        "id": "hdogiga20"
+      }
+    ],
+    "jmbNumberChangePossible": true
+  },
+  "monthlyUsage": [
+    {
+      "hdoCode": "hdo0123456",
+      "titlePrimary": "メイン回線",
+      "titleDetail": "ギガプラン 20GB",
+      "entries": [
+        {
+          "id": "2024年05月",
+          "monthLabel": "2024年05月",
+          "highSpeedGB": 5.7,
+          "lowSpeedGB": 0.2,
+          "highSpeedText": "5.7GB",
+          "lowSpeedText": "0.2GB",
+          "note": "ホスピタリティ割引適用",
+          "hasData": true
+        },
+        {
+          "id": "2024年04月",
+          "monthLabel": "2024年04月",
+          "highSpeedGB": 12.8,
+          "lowSpeedGB": null,
+          "highSpeedText": "12.8GB",
+          "lowSpeedText": null,
+          "note": null,
+          "hasData": true
+        },
+        {
+          "id": "2024年03月",
+          "monthLabel": "2024年03月",
+          "highSpeedGB": 9.4,
+          "lowSpeedGB": 0.4,
+          "highSpeedText": "9.4GB",
+          "lowSpeedText": "0.4GB",
+          "note": null,
+          "hasData": true
+        },
+        {
+          "id": "2024年02月",
+          "monthLabel": "2024年02月",
+          "highSpeedGB": 7.2,
+          "lowSpeedGB": 0.1,
+          "highSpeedText": "7.2GB",
+          "lowSpeedText": "0.1GB",
+          "note": null,
+          "hasData": true
+        },
+        {
+          "id": "2024年01月",
+          "monthLabel": "2024年01月",
+          "highSpeedGB": 6.9,
+          "lowSpeedGB": null,
+          "highSpeedText": "6.9GB",
+          "lowSpeedText": null,
+          "note": "5Gエリア利用増",
+          "hasData": true
+        }
+      ]
+    }
+  ],
+  "dailyUsage": [
+    {
+      "hdoCode": "hdo0123456",
+      "titlePrimary": "メイン回線",
+      "titleDetail": "ギガプラン 20GB",
+      "entries": [
+        {
+          "id": "2024年05月20日",
+          "dateLabel": "2024年05月20日",
+          "highSpeedMB": 820,
+          "lowSpeedMB": 120,
+          "highSpeedText": "820MB",
+          "lowSpeedText": "120MB",
+          "note": "テザリング利用",
+          "hasData": true
+        },
+        {
+          "id": "2024年05月19日",
+          "dateLabel": "2024年05月19日",
+          "highSpeedMB": 640,
+          "lowSpeedMB": null,
+          "highSpeedText": "640MB",
+          "lowSpeedText": null,
+          "note": null,
+          "hasData": true
+        },
+        {
+          "id": "2024年05月18日",
+          "dateLabel": "2024年05月18日",
+          "highSpeedMB": 1200,
+          "lowSpeedMB": null,
+          "highSpeedText": "1.2GB",
+          "lowSpeedText": null,
+          "note": "動画視聴",
+          "hasData": true
+        },
+        {
+          "id": "2024年05月17日",
+          "dateLabel": "2024年05月17日",
+          "highSpeedMB": 550,
+          "lowSpeedMB": 80,
+          "highSpeedText": "550MB",
+          "lowSpeedText": "80MB",
+          "note": null,
+          "hasData": true
+        },
+        {
+          "id": "2024年05月16日",
+          "dateLabel": "2024年05月16日",
+          "highSpeedMB": 430,
+          "lowSpeedMB": null,
+          "highSpeedText": "430MB",
+          "lowSpeedText": null,
+          "note": null,
+          "hasData": true
+        }
+      ]
+    }
+  ]
+}
