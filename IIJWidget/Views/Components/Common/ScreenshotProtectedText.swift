@@ -153,6 +153,7 @@ private class ScreenshotProtectedLabel: UIView {
     func update(text: String, font: UIFont, textColor: UIColor) {
         secureTextField.text = text
         secureTextField.font = font
+        secureTextField.textColor = .clear  // セキュアテキストの黒い点を透明にする
         label.text = text
         label.font = font
         label.textColor = textColor

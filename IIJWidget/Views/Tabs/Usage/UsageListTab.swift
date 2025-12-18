@@ -269,16 +269,19 @@ struct MonthlyUsageServiceCard: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                Text(service.titlePrimary)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-            }
-            if let detail = service.titleDetail {
                 ScreenshotProtectedText(
-                    detail,
-                    font: .caption,
-                    foregroundStyle: .secondary,
+                    service.titlePrimary,
+                    font: .subheadline,
+                    foregroundStyle: .primary,
                     isProtected: hidePhoneOnScreenshot
                 )
+                .fontWeight(.bold)
+                .fontDesign(.rounded)
+            }
+            if let detail = service.titleDetail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 0) {
@@ -367,16 +370,19 @@ struct DailyUsageServiceCard: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                Text(service.titlePrimary)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-            }
-            if let detail = service.titleDetail {
                 ScreenshotProtectedText(
-                    detail,
-                    font: .caption,
-                    foregroundStyle: .secondary,
+                    service.titlePrimary,
+                    font: .subheadline,
+                    foregroundStyle: .primary,
                     isProtected: hidePhoneOnScreenshot
                 )
+                .fontWeight(.bold)
+                .fontDesign(.rounded)
+            }
+            if let detail = service.titleDetail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 0) {
