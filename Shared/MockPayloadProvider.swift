@@ -204,4 +204,101 @@ enum MockPayloadProvider {
             )
         ]
     }
+
+    static func billDetail(for entry: BillSummaryResponse.BillEntry) -> BillDetailResponse? {
+        guard let month = entry.month, let totalAmount = entry.totalAmount else {
+            return nil
+        }
+
+        let year = String(month.prefix(4))
+        let monthValue = String(month.suffix(2))
+        let monthText = "\(year)年\(monthValue)月分"
+
+        // 基本料金の計算（合計から通話料とユニバーサル料を引いたもの）
+        let universalFee = 3
+        let callFee: Int
+        let basicFee: Int
+
+        // 請求額に応じて通話料を調整
+        switch totalAmount {
+        case ..<1000:
+            callFee = 0
+            basicFee = totalAmount - universalFee
+        case 1000..<2000:
+            callFee = Int.random(in: 50...200)
+            basicFee = totalAmount - callFee - universalFee
+        default:
+            callFee = Int.random(in: 100...500)
+            basicFee = totalAmount - callFee - universalFee
+        }
+
+        let basicSection = BillDetailResponse.Section(
+            title: "基本料金",
+            items: [
+                BillDetailResponse.Item(
+                    title: "ギガプラン（音声通話機能付き）",
+                    detail: "10GBプラン",
+                    quantityText: "1",
+                    unitPriceText: "¥\(basicFee)",
+                    amountText: "¥\(basicFee)"
+                )
+            ],
+            subtotalText: "¥\(basicFee)"
+        )
+
+        var sections: [BillDetailResponse.Section] = [basicSection]
+
+        if callFee > 0 {
+            let callSection = BillDetailResponse.Section(
+                title: "通話・通信料",
+                items: [
+                    BillDetailResponse.Item(
+                        title: "国内音声通話料",
+                        detail: "携帯電話宛",
+                        quantityText: "\(callFee / 11)秒",
+                        unitPriceText: "¥11/30秒",
+                        amountText: "¥\(callFee)"
+                    )
+                ],
+                subtotalText: "¥\(callFee)"
+            )
+            sections.append(callSection)
+        }
+
+        let otherSection = BillDetailResponse.Section(
+            title: "その他の料金",
+            items: [
+                BillDetailResponse.Item(
+                    title: "ユニバーサルサービス料",
+                    detail: nil,
+                    quantityText: "1",
+                    unitPriceText: "¥\(universalFee)",
+                    amountText: "¥\(universalFee)"
+                )
+            ],
+            subtotalText: "¥\(universalFee)"
+        )
+        sections.append(otherSection)
+
+        // 税込みの金額から税抜きを逆算（簡略化のため総額の約90%とする）
+        let subtotal = Int(Double(totalAmount) / 1.1)
+        let tax = totalAmount - subtotal
+
+        let taxBreakdowns = [
+            BillDetailResponse.TaxBreakdown(
+                label: "10%対象",
+                amountText: "¥\(subtotal)",
+                taxLabel: "消費税等（10%）",
+                taxAmountText: "¥\(tax)"
+            )
+        ]
+
+        return BillDetailResponse(
+            monthText: monthText,
+            totalAmountText: "¥\(totalAmount.formatted())",
+            totalAmount: totalAmount,
+            taxBreakdowns: taxBreakdowns,
+            sections: sections
+        )
+    }
 }
