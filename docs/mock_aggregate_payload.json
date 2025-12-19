@@ -1,193 +1,552 @@
 {
-  "fetchedAt": "2024-05-20T12:00:00Z",
-  "top": {
-    "serviceInfoList": [
+  "bill" : {
+    "billList" : [
       {
-        "dataShareNotCovered": false,
-        "serviceCode": "hdo0123456",
-        "totalCapacity": 20,
-        "dataShareExistence": true,
-        "planName": "ギガプラン 20GB (音声)",
-        "chargePlan": "Giga Plan",
-        "serviceName": "メイン回線",
-        "phoneNo": "080-1234-5678",
-        "couponData": [
-          {
-            "adjustmentCoupon": false,
-            "sequenceNo": 1,
-            "month": "202405",
-            "couponValue": 14.3
-          }
-        ]
-      }
-    ],
-    "billSummary": {
-      "amount": "2,980",
-      "miowari": "-",
-      "month": "202404"
-    },
-    "hasVouchers": false,
-    "usagePeriod": "2024/05/01 - 2024/05/31",
-    "prefixList": ["hdo"]
-  },
-  "bill": {
-    "billList": [
-      {
-        "billNoList": ["BILL-MOCK-001"],
-        "month": "202404",
-        "totalAmount": 2980,
-        "usedPoint": 0,
-        "isUnpaid": false,
-        "id": "BILL-MOCK-001"
+        "billNoList" : [
+          "111015580113"
+        ],
+        "isUnpaid" : false,
+        "month" : "202511",
+        "totalAmount" : 1404,
+        "usedPoint" : 0
       },
       {
-        "billNoList": ["BILL-MOCK-002"],
-        "month": "202403",
-        "totalAmount": 3100,
-        "usedPoint": 200,
-        "isUnpaid": false,
-        "id": "BILL-MOCK-002"
-      }
-    ],
-    "isVoiceSim": true,
-    "isImt": false
-  },
-  "serviceStatus": {
-    "serviceInfoList": [
-      {
-        "simInfoList": [
-          {
-            "simType": "Voice+Data",
-            "status": "開通済み",
-            "id": "Voice+Data開通済み"
-          }
+        "billNoList" : [
+          "111005999429"
         ],
-        "serviceCodePrefix": "hdo",
-        "stopDate": null,
-        "planCode": "giga20",
-        "isBic": false,
-        "status": "ご利用中",
-        "id": "hdogiga20"
+        "isUnpaid" : false,
+        "month" : "202510",
+        "totalAmount" : 1404,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110996481070"
+        ],
+        "isUnpaid" : false,
+        "month" : "202509",
+        "totalAmount" : 904,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110987036127"
+        ],
+        "isUnpaid" : false,
+        "month" : "202508",
+        "totalAmount" : 904,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110977637436"
+        ],
+        "isUnpaid" : false,
+        "month" : "202507",
+        "totalAmount" : 904,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110968293003"
+        ],
+        "isUnpaid" : false,
+        "month" : "202506",
+        "totalAmount" : 903,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110959041819"
+        ],
+        "isUnpaid" : false,
+        "month" : "202505",
+        "totalAmount" : 903,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110949886453"
+        ],
+        "isUnpaid" : false,
+        "month" : "202504",
+        "totalAmount" : 1349,
+        "usedPoint" : 0
+      },
+      {
+        "billNoList" : [
+          "110939799284",
+          "110940851950"
+        ],
+        "isUnpaid" : false,
+        "month" : "202503",
+        "totalAmount" : 4353,
+        "usedPoint" : 0
       }
     ],
-    "jmbNumberChangePossible": true
+    "isImt" : false,
+    "isVoiceSim" : true
   },
-  "monthlyUsage": [
+  "dailyUsage" : [
     {
-      "hdoCode": "hdo0123456",
-      "titlePrimary": "メイン回線",
-      "titleDetail": "ギガプラン 20GB",
-      "entries": [
+      "entries" : [
         {
-          "id": "2024年05月",
-          "monthLabel": "2024年05月",
-          "highSpeedGB": 5.7,
-          "lowSpeedGB": 0.2,
-          "highSpeedText": "5.7GB",
-          "lowSpeedText": "0.2GB",
-          "note": "ホスピタリティ割引適用",
-          "hasData": true
+          "dateLabel" : "2025年12月19日",
+          "hasData" : true,
+          "highSpeedMB" : 674,
+          "highSpeedText" : "674MB",
+          "id" : "2025年12月19日"
         },
         {
-          "id": "2024年04月",
-          "monthLabel": "2024年04月",
-          "highSpeedGB": 12.8,
-          "lowSpeedGB": null,
-          "highSpeedText": "12.8GB",
-          "lowSpeedText": null,
-          "note": null,
-          "hasData": true
+          "dateLabel" : "2025年12月18日",
+          "hasData" : true,
+          "highSpeedMB" : 0,
+          "highSpeedText" : "0MB",
+          "id" : "2025年12月18日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
         },
         {
-          "id": "2024年03月",
-          "monthLabel": "2024年03月",
-          "highSpeedGB": 9.4,
-          "lowSpeedGB": 0.4,
-          "highSpeedText": "9.4GB",
-          "lowSpeedText": "0.4GB",
-          "note": null,
-          "hasData": true
+          "dateLabel" : "2025年12月17日",
+          "hasData" : true,
+          "highSpeedMB" : 143,
+          "highSpeedText" : "143MB",
+          "id" : "2025年12月17日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
         },
         {
-          "id": "2024年02月",
-          "monthLabel": "2024年02月",
-          "highSpeedGB": 7.2,
-          "lowSpeedGB": 0.1,
-          "highSpeedText": "7.2GB",
-          "lowSpeedText": "0.1GB",
-          "note": null,
-          "hasData": true
+          "dateLabel" : "2025年12月16日",
+          "hasData" : true,
+          "highSpeedMB" : 399,
+          "highSpeedText" : "399MB",
+          "id" : "2025年12月16日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
         },
         {
-          "id": "2024年01月",
-          "monthLabel": "2024年01月",
-          "highSpeedGB": 6.9,
-          "lowSpeedGB": null,
-          "highSpeedText": "6.9GB",
-          "lowSpeedText": null,
-          "note": "5Gエリア利用増",
-          "hasData": true
+          "dateLabel" : "2025年12月15日",
+          "hasData" : true,
+          "highSpeedMB" : 277,
+          "highSpeedText" : "277MB",
+          "id" : "2025年12月15日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月14日",
+          "hasData" : true,
+          "highSpeedMB" : 645,
+          "highSpeedText" : "645MB",
+          "id" : "2025年12月14日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月13日",
+          "hasData" : true,
+          "highSpeedMB" : 164,
+          "highSpeedText" : "164MB",
+          "id" : "2025年12月13日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月12日",
+          "hasData" : true,
+          "highSpeedMB" : 462,
+          "highSpeedText" : "462MB",
+          "id" : "2025年12月12日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月11日",
+          "hasData" : true,
+          "highSpeedMB" : 305,
+          "highSpeedText" : "305MB",
+          "id" : "2025年12月11日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月10日",
+          "hasData" : true,
+          "highSpeedMB" : 486,
+          "highSpeedText" : "486MB",
+          "id" : "2025年12月10日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月09日",
+          "hasData" : true,
+          "highSpeedMB" : 1132,
+          "highSpeedText" : "1132MB",
+          "id" : "2025年12月09日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月08日",
+          "hasData" : true,
+          "highSpeedMB" : 237,
+          "highSpeedText" : "237MB",
+          "id" : "2025年12月08日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月07日",
+          "hasData" : true,
+          "highSpeedMB" : 319,
+          "highSpeedText" : "319MB",
+          "id" : "2025年12月07日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月06日",
+          "hasData" : true,
+          "highSpeedMB" : 125,
+          "highSpeedText" : "125MB",
+          "id" : "2025年12月06日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月05日",
+          "hasData" : true,
+          "highSpeedMB" : 410,
+          "highSpeedText" : "410MB",
+          "id" : "2025年12月05日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月04日",
+          "hasData" : true,
+          "highSpeedMB" : 389,
+          "highSpeedText" : "389MB",
+          "id" : "2025年12月04日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月03日",
+          "hasData" : true,
+          "highSpeedMB" : 1130,
+          "highSpeedText" : "1130MB",
+          "id" : "2025年12月03日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月02日",
+          "hasData" : true,
+          "highSpeedMB" : 610,
+          "highSpeedText" : "610MB",
+          "id" : "2025年12月02日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年12月01日",
+          "hasData" : true,
+          "highSpeedMB" : 292,
+          "highSpeedText" : "292MB",
+          "id" : "2025年12月01日",
+          "lowSpeedMB" : 1,
+          "lowSpeedText" : "1MB"
+        },
+        {
+          "dateLabel" : "2025年11月30日",
+          "hasData" : true,
+          "highSpeedMB" : 0,
+          "highSpeedText" : "0MB",
+          "id" : "2025年11月30日",
+          "lowSpeedMB" : 36,
+          "lowSpeedText" : "36MB"
+        },
+        {
+          "dateLabel" : "2025年11月29日",
+          "hasData" : true,
+          "highSpeedMB" : 0,
+          "highSpeedText" : "0MB",
+          "id" : "2025年11月29日",
+          "lowSpeedMB" : 22,
+          "lowSpeedText" : "22MB"
+        },
+        {
+          "dateLabel" : "2025年11月28日",
+          "hasData" : true,
+          "highSpeedMB" : 0,
+          "highSpeedText" : "0MB",
+          "id" : "2025年11月28日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月27日",
+          "hasData" : true,
+          "highSpeedMB" : 0,
+          "highSpeedText" : "0MB",
+          "id" : "2025年11月27日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月26日",
+          "hasData" : true,
+          "highSpeedMB" : 282,
+          "highSpeedText" : "282MB",
+          "id" : "2025年11月26日",
+          "lowSpeedMB" : 6,
+          "lowSpeedText" : "6MB"
+        },
+        {
+          "dateLabel" : "2025年11月25日",
+          "hasData" : true,
+          "highSpeedMB" : 371,
+          "highSpeedText" : "371MB",
+          "id" : "2025年11月25日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月24日",
+          "hasData" : true,
+          "highSpeedMB" : 77,
+          "highSpeedText" : "77MB",
+          "id" : "2025年11月24日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月23日",
+          "hasData" : true,
+          "highSpeedMB" : 78,
+          "highSpeedText" : "78MB",
+          "id" : "2025年11月23日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月22日",
+          "hasData" : true,
+          "highSpeedMB" : 228,
+          "highSpeedText" : "228MB",
+          "id" : "2025年11月22日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月21日",
+          "hasData" : true,
+          "highSpeedMB" : 195,
+          "highSpeedText" : "195MB",
+          "id" : "2025年11月21日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月20日",
+          "hasData" : true,
+          "highSpeedMB" : 455,
+          "highSpeedText" : "455MB",
+          "id" : "2025年11月20日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
+        },
+        {
+          "dateLabel" : "2025年11月19日",
+          "hasData" : true,
+          "highSpeedMB" : 663,
+          "highSpeedText" : "663MB",
+          "id" : "2025年11月19日",
+          "lowSpeedMB" : 0,
+          "lowSpeedText" : "0MB"
         }
-      ]
+      ],
+      "hdoCode" : "hdu92847356",
+      "titleDetail" : "（音声・タイプA） / hdc92847349（10ギガプラン）8981300012345678901",
+      "titlePrimary" : "070-5283-7491"
     }
   ],
-  "dailyUsage": [
+  "fetchedAt" : "2025-12-19T12:08:43Z",
+  "monthlyUsage" : [
     {
-      "hdoCode": "hdo0123456",
-      "titlePrimary": "メイン回線",
-      "titleDetail": "ギガプラン 20GB",
-      "entries": [
+      "entries" : [
         {
-          "id": "2024年05月20日",
-          "dateLabel": "2024年05月20日",
-          "highSpeedMB": 820,
-          "lowSpeedMB": 120,
-          "highSpeedText": "820MB",
-          "lowSpeedText": "120MB",
-          "note": "テザリング利用",
-          "hasData": true
+          "hasData" : true,
+          "highSpeedGB" : 7.71,
+          "highSpeedText" : "7.71GB",
+          "id" : "2025年12月",
+          "lowSpeedGB" : 0.01,
+          "lowSpeedText" : "0.01GB",
+          "monthLabel" : "2025年12月"
         },
         {
-          "id": "2024年05月19日",
-          "dateLabel": "2024年05月19日",
-          "highSpeedMB": 640,
-          "lowSpeedMB": null,
-          "highSpeedText": "640MB",
-          "lowSpeedText": null,
-          "note": null,
-          "hasData": true
+          "hasData" : true,
+          "highSpeedGB" : 10.58,
+          "highSpeedText" : "10.58GB",
+          "id" : "2025年11月",
+          "lowSpeedGB" : 0.07,
+          "lowSpeedText" : "0.07GB",
+          "monthLabel" : "2025年11月"
         },
         {
-          "id": "2024年05月18日",
-          "dateLabel": "2024年05月18日",
-          "highSpeedMB": 1200,
-          "lowSpeedMB": null,
-          "highSpeedText": "1.2GB",
-          "lowSpeedText": null,
-          "note": "動画視聴",
-          "hasData": true
+          "hasData" : true,
+          "highSpeedGB" : 27.86,
+          "highSpeedText" : "27.86GB",
+          "id" : "2025年10月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年10月"
         },
         {
-          "id": "2024年05月17日",
-          "dateLabel": "2024年05月17日",
-          "highSpeedMB": 550,
-          "lowSpeedMB": 80,
-          "highSpeedText": "550MB",
-          "lowSpeedText": "80MB",
-          "note": null,
-          "hasData": true
+          "hasData" : true,
+          "highSpeedGB" : 20.2,
+          "highSpeedText" : "20.2GB",
+          "id" : "2025年09月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年09月"
         },
         {
-          "id": "2024年05月16日",
-          "dateLabel": "2024年05月16日",
-          "highSpeedMB": 430,
-          "lowSpeedMB": null,
-          "highSpeedText": "430MB",
-          "lowSpeedText": null,
-          "note": null,
-          "hasData": true
+          "hasData" : true,
+          "highSpeedGB" : 12.03,
+          "highSpeedText" : "12.03GB",
+          "id" : "2025年08月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年08月"
+        },
+        {
+          "hasData" : true,
+          "highSpeedGB" : 16.04,
+          "highSpeedText" : "16.04GB",
+          "id" : "2025年07月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年07月"
+        },
+        {
+          "hasData" : true,
+          "highSpeedGB" : 11.51,
+          "highSpeedText" : "11.51GB",
+          "id" : "2025年06月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年06月"
+        },
+        {
+          "hasData" : true,
+          "highSpeedGB" : 19.45,
+          "highSpeedText" : "19.45GB",
+          "id" : "2025年05月",
+          "lowSpeedGB" : 0,
+          "lowSpeedText" : "0.0GB",
+          "monthLabel" : "2025年05月"
+        },
+        {
+          "hasData" : true,
+          "highSpeedGB" : 8.81,
+          "highSpeedText" : "8.81GB",
+          "id" : "2025年04月",
+          "lowSpeedGB" : 0.01,
+          "lowSpeedText" : "0.01GB",
+          "monthLabel" : "2025年04月"
+        },
+        {
+          "hasData" : true,
+          "highSpeedGB" : 6.04,
+          "highSpeedText" : "6.04GB",
+          "id" : "2025年03月",
+          "lowSpeedGB" : 0.18,
+          "lowSpeedText" : "0.18GB",
+          "monthLabel" : "2025年03月"
+        },
+        {
+          "hasData" : false,
+          "id" : "2025年02月",
+          "monthLabel" : "2025年02月",
+          "note" : "データ利用はありません"
+        },
+        {
+          "hasData" : false,
+          "id" : "2025年01月",
+          "monthLabel" : "2025年01月",
+          "note" : "データ利用はありません"
         }
-      ]
+      ],
+      "hdoCode" : "hdu92847356",
+      "titleDetail" : "（音声・タイプA） / hdc92847349 （ / 10ギガプラン） / 8981300012345678901",
+      "titlePrimary" : "070-5283-7491"
     }
-  ]
+  ],
+  "serviceStatus" : {
+    "jmbNumberChangePossible" : false,
+    "serviceInfoList" : [
+      {
+        "isBic" : false,
+        "planCode" : "CN1000",
+        "serviceCodePrefix" : "hdc",
+        "simInfoList" : [
+          {
+            "simType" : "2",
+            "status" : "O"
+          }
+        ],
+        "status" : "O",
+        "stopDate" : ""
+      }
+    ]
+  },
+  "top" : {
+    "billSummary" : {
+
+    },
+    "hasVouchers" : false,
+    "prefixList" : [
+      "hdc",
+      "hdu"
+    ],
+    "serviceInfoList" : [
+      {
+        "chargePlan" : "10",
+        "couponData" : [
+          {
+            "adjustmentCoupon" : false,
+            "couponValue" : 0,
+            "month" : "202512",
+            "sequenceNo" : 0
+          },
+          {
+            "couponValue" : 1.8,
+            "month" : "202601",
+            "sequenceNo" : 1
+          },
+          {
+            "couponValue" : 0,
+            "month" : "202602",
+            "sequenceNo" : 2
+          },
+          {
+            "couponValue" : 0,
+            "month" : "202603",
+            "sequenceNo" : 3
+          }
+        ],
+        "dataShareExistence" : false,
+        "dataShareNotCovered" : false,
+        "phoneNo" : "070-5283-7491",
+        "planName" : "ギガプラン",
+        "serviceCode" : "hdc92847349",
+        "serviceName" : "音声SIM",
+        "totalCapacity" : 10
+      }
+    ],
+    "usagePeriod" : "10ヵ月"
+  }
 }
