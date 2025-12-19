@@ -176,6 +176,29 @@ struct WidgetRefreshService {
     }
 
     func fetchBillDetail(entry: BillSummaryResponse.BillEntry, manualCredentials: Credentials? = nil) async throws -> BillDetailResponse {
+        // Check for mock credentials first
+        if let manual = manualCredentials, MockPayloadProvider.isMockCredentials(manual) {
+            guard let mockDetail = MockPayloadProvider.billDetail(for: entry) else {
+                throw NSError(
+                    domain: "WidgetRefreshService",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "モック請求詳細データを生成できませんでした"]
+                )
+            }
+            return mockDetail
+        }
+
+        if let stored = try? credentialStore.load(), MockPayloadProvider.isMockCredentials(stored) {
+            guard let mockDetail = MockPayloadProvider.billDetail(for: entry) else {
+                throw NSError(
+                    domain: "WidgetRefreshService",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "モック請求詳細データを生成できませんでした"]
+                )
+            }
+            return mockDetail
+        }
+
         do {
             return try await apiClient.fetchBillDetail(entry: entry)
         } catch {
