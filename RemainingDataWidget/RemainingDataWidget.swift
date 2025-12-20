@@ -435,10 +435,10 @@ struct RemainingDataWidgetEntryView: View {
             .padding(6)
             .background(
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.primary.opacity(0.06))
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
                     )
             )
         } else {
