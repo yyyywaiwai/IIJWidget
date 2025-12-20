@@ -156,6 +156,7 @@ private struct UsageTabSwitcher: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                     .background {
                         if selectedTab == tab {
                             Capsule()

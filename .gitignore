@@ -40,3 +40,4 @@ Tools/IIJFetcher/.build/
 # Custom
 *.swp
 build.log
+buildServer.json

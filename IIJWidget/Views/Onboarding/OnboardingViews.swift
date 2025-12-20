@@ -1,52 +1,130 @@
 import SwiftUI
 
 struct OnboardingFlowView: View {
-    enum Step {
-        case disclaimer
-        case credentials
+    enum Step: Int, CaseIterable {
+        case disclaimer = 0
+        case credentials = 1
+        
+        var next: Step? {
+            Step(rawValue: self.rawValue + 1)
+        }
+        
+        var prev: Step? {
+            Step(rawValue: self.rawValue - 1)
+        }
     }
 
     @ObservedObject var viewModel: AppViewModel
     let onFinish: () -> Void
 
     @State private var step: Step = .disclaimer
+    @Namespace private var animation
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch step {
-                case .disclaimer:
-                    OnboardingDisclaimerStep {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            step = .credentials
+        ZStack {
+            // Background
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            
+            LinearGradient(
+                colors: [Color.accentColor.opacity(0.08), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            ).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header Bar
+                HStack {
+                    if step != .disclaimer {
+                        Button {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                if let prev = step.prev { step = prev }
+                            }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(Color(.secondarySystemBackground)))
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    } else {
+                        Color.clear.frame(width: 36, height: 36)
+                    }
+                    
+                    Spacer()
+                    
+                    // Progress Indicator
+                    HStack(spacing: 6) {
+                        ForEach(Step.allCases, id: \.self) { item in
+                            Capsule()
+                                .fill(step == item ? Color.accentColor : Color.secondary.opacity(0.2))
+                                .frame(width: step == item ? 20 : 6, height: 6)
                         }
                     }
-                case .credentials:
+                    
+                    Spacer()
+                    
+                    Color.clear.frame(width: 36, height: 36)
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+                TabView(selection: $step) {
+                    OnboardingDisclaimerStep {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            if let next = step.next { step = next }
+                        }
+                    }
+                    .tag(Step.disclaimer)
+
                     OnboardingCredentialSetupStep(viewModel: viewModel) {
                         onFinish()
                     }
+                    .tag(Step.credentials)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .scrollDisabled(true)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if step == .credentials {
-                        Button("戻る") {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                step = .disclaimer
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle(step == .disclaimer ? "ご利用前のお願い" : "ログイン設定")
-            .navigationBarTitleDisplayMode(.inline)
         }
+    }
+}
+
+struct OnboardingHeader: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.1))
+                    .frame(width: 70, height: 70)
+                
+                Image(systemName: systemImage)
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(.top, 12)
+
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(.title2, design: .rounded).weight(.bold))
+                
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+        }
+        .padding(.bottom, 24)
     }
 }
 
 struct OnboardingDisclaimerStep: View {
     let onAgree: () -> Void
+    @State private var appearItems = false
 
     private struct Highlight: Identifiable {
         let id = UUID()
@@ -60,86 +138,104 @@ struct OnboardingDisclaimerStep: View {
         [
             Highlight(
                 icon: "exclamationmark.triangle.fill",
-                iconColor: .pink,
+                iconColor: .orange,
                 title: "非公式アプリ",
-                detail: "IIJWidgetは個人プロジェクトであり、公式サポートや補償の対象ではありません。"
+                detail: "IIJmio公式のアプリではありません。開発者個人によるプロジェクトです。"
             ),
             Highlight(
                 icon: "lock.shield.fill",
-                iconColor: .blue,
-                title: "資格情報の扱い",
-                detail: "入力内容は端末キーチェーンにのみ暗号化保存され、サードパーティのサーバーへ送信しません。"
+                iconColor: .green,
+                title: "プライバシー保護",
+                detail: "パスワードは端末のキーチェーンにのみ保存され、外部送信されません。"
             ),
             Highlight(
                 icon: "hand.raised.fill",
-                iconColor: .orange,
+                iconColor: .blue,
                 title: "自己責任での利用",
-                detail: "アカウント停止などのリスクを理解した上で、自己責任でご利用ください。"
+                detail: "アプリの使用に伴うトラブル等について、一切の責任を負いかねます。"
             )
         ]
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("ご利用前の確認")
-                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                    Text("IIJWidgetを使う前に、以下のポイントをご確認ください。")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    OnboardingHeader(
+                        title: "ご利用前のご確認",
+                        subtitle: "IIJWidgetを安全にご利用いただくために、以下の内容をご確認ください。",
+                        systemImage: "checklist.checked"
+                    )
 
-                VStack(spacing: 16) {
-                    ForEach(highlights) { highlight in
-                        HStack(alignment: .top, spacing: 16) {
-                            ZStack {
-                                Circle()
-                                    .fill(highlight.iconColor.opacity(0.12))
-                                    .frame(width: 44, height: 44)
-                                Image(systemName: highlight.icon)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(highlight.iconColor)
-                            }
+                    VStack(spacing: 12) {
+                        ForEach(Array(highlights.enumerated()), id: \.offset) { index, highlight in
+                            HStack(alignment: .top, spacing: 16) {
+                                ZStack {
+                                    Circle()
+                                        .fill(highlight.iconColor.opacity(0.1))
+                                        .frame(width: 38, height: 38)
+                                    Image(systemName: highlight.icon)
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(highlight.iconColor)
+                                }
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(highlight.title)
-                                    .font(.headline)
-                                Text(highlight.detail)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(highlight.title)
+                                        .font(.system(.headline, design: .rounded))
+                                    Text(highlight.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .lineSpacing(2)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                            .offset(y: appearItems ? 0 : 15)
+                            .opacity(appearItems ? 1 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(Double(index) * 0.08), value: appearItems)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(.secondarySystemBackground))
-                        )
                     }
+                    .padding(.horizontal, 20)
                 }
-
-                Text("上記に同意できない場合はアプリを終了してください。")
-                    .font(.footnote)
+            }
+            
+            VStack(spacing: 16) {
+                Text("上記の内容に同意し、アプリを開始します。")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
                     onAgree()
                 } label: {
-                    Text("同意して続行")
-                        .fontWeight(.semibold)
+                    Text("同意して次へ")
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: Color.accentColor.opacity(0.2), radius: 8, y: 4)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 36)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
         }
-        .background(Color(.systemGroupedBackground))
+        .onAppear {
+            appearItems = true
+        }
     }
 }
 
@@ -157,64 +253,86 @@ struct OnboardingCredentialSetupStep: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("ログイン情報を設定")
-                        .font(.title.bold())
-                    Text("IIJmioアカウントの資格情報を入力してください。保存後は設定タブまたは右上の更新ボタンから残量取得を実行できます。")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(spacing: 16) {
-                    IconTextField(
-                        systemImage: "person.fill",
-                        placeholder: "mioID / メールアドレス",
-                        text: $viewModel.mioId
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    OnboardingHeader(
+                        title: "ログイン設定",
+                        subtitle: "IIJmioのmioID（またはメールアドレス）とパスワードを入力してください。",
+                        systemImage: "person.badge.key.fill"
                     )
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($field, equals: .mioId)
 
-                    IconSecureField(
-                        systemImage: "lock.fill",
-                        placeholder: "パスワード",
-                        text: $viewModel.password
-                    )
-                    .focused($field, equals: .password)
+                    VStack(spacing: 16) {
+                        VStack(spacing: 1) {
+                            ModernTextField(
+                                systemImage: "person.fill",
+                                placeholder: "mioID / メールアドレス",
+                                text: $viewModel.mioId,
+                                isFocused: field == .mioId
+                            )
+                            .focused($field, equals: .mioId)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
 
-                    Text("入力内容は端末キーチェーンに暗号化して保存され、ウィジェット更新時にのみ使用されます。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                            Divider().padding(.leading, 44)
 
-                VStack(spacing: 12) {
-                    if let loginErrorMessage {
-                        Text(loginErrorMessage)
-                            .font(.footnote)
+                            ModernSecureField(
+                                systemImage: "lock.fill",
+                                placeholder: "パスワード",
+                                text: $viewModel.password,
+                                isFocused: field == .password
+                            )
+                            .focused($field, equals: .password)
+                        }
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                        if let loginErrorMessage {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                Text(loginErrorMessage)
+                            }
+                            .font(.caption)
                             .foregroundStyle(.red)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                        }
+                        
+                        Text("入力された資格情報は、デバイス内にのみ安全に保管されます。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
                     }
-
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        Label("保存して取得", systemImage: "arrow.down.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(isSubmitting || !viewModel.canSubmit)
+                    .padding(.horizontal, 24)
                 }
-
-                Text("ログインを行うと再度この画面は表示されませんが、設定タブからいつでも資格情報を更新できます。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
-            .padding()
+
+            VStack(spacing: 0) {
+                Button {
+                    Task { await submit() }
+                } label: {
+                    HStack {
+                        if isSubmitting {
+                            ProgressView()
+                                .tint(.white)
+                                .padding(.trailing, 8)
+                        }
+                        Text(isSubmitting ? "認証中..." : "保存して利用開始")
+                            .font(.system(.headline, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(viewModel.canSubmit ? Color.accentColor : Color.gray.opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: viewModel.canSubmit ? Color.accentColor.opacity(0.2) : .clear, radius: 8, y: 4)
+                }
+                .disabled(isSubmitting || !viewModel.canSubmit)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+            }
         }
     }
 
@@ -233,44 +351,54 @@ struct OnboardingCredentialSetupStep: View {
             case .success:
                 onFinish()
             case .failure(let error):
-                loginErrorMessage = error.localizedDescription
+                loginErrorMessage = "ログインに失敗しました。IDとパスワードを確認してください。"
             }
         }
     }
 }
 
-private struct IconTextField: View {
+private struct ModernTextField: View {
     let systemImage: String
     let placeholder: String
     @Binding var text: String
+    let isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 18))
+                .foregroundStyle(isFocused ? Color.accentColor : .secondary)
+                .frame(width: 24)
+            
             TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
+                .font(.body)
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(isFocused ? Color.accentColor.opacity(0.05) : Color.clear)
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 }
 
-private struct IconSecureField: View {
+private struct ModernSecureField: View {
     let systemImage: String
     let placeholder: String
     @Binding var text: String
+    let isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 18))
+                .foregroundStyle(isFocused ? Color.accentColor : .secondary)
+                .frame(width: 24)
+            
             SecureField(placeholder, text: $text)
-                .textFieldStyle(.plain)
+                .font(.body)
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(isFocused ? Color.accentColor.opacity(0.05) : Color.clear)
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 }
