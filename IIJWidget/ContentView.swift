@@ -5,7 +5,8 @@ struct ContentView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedSection: AppSection = .home
     @State private var isOnboardingPresented = false
-    @FocusState private var focusedField: CredentialsField?
+    @State private var errorToastID = UUID()
+    @State private var dismissedErrorToastID: UUID?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -14,30 +15,28 @@ struct ContentView: View {
                 viewModel: viewModel,
                 selectedSection: $selectedSection,
                 hasCompletedOnboarding: $hasCompletedOnboarding,
-                focusedField: $focusedField,
                 payload: loadedPayload,
                 presentOnboarding: { isOnboardingPresented = true }
             )
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        focusedField = nil
                         viewModel.refreshManually()
                     } label: {
                         Label("最新取得", systemImage: "arrow.clockwise")
                     }
                     .disabled(!viewModel.canSubmit || isLoading)
                 }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("閉じる") { focusedField = nil }
-                }
             }
-            .overlay(alignment: .bottom) {
-                StateFeedbackBanner(state: viewModel.state)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let message = errorMessage, dismissedErrorToastID != errorToastID {
+                    StateFeedbackBanner(message: message) {
+                        dismissedErrorToastID = errorToastID
+                    }
                     .padding(.horizontal)
-                    .padding(.bottom, 8)
+                    .padding(.vertical, 8)
+                    .padding(.bottom, 64)
+                }
             }
             .overlay {
                 if isLoading {
@@ -64,6 +63,11 @@ struct ContentView: View {
             guard newPhase == .active else { return }
             Task { await viewModel.triggerAutomaticRefreshIfNeeded() }
         }
+        .onReceive(viewModel.$state) { state in
+            guard case .failed = state else { return }
+            errorToastID = UUID()
+            dismissedErrorToastID = nil
+        }
         .onChange(of: viewModel.hasStoredCredentials) { _ in
             evaluateOnboardingPresentation()
         }
@@ -87,6 +91,13 @@ struct ContentView: View {
             return true
         }
         return false
+    }
+
+    private var errorMessage: String? {
+        if case .failed(let message, _) = viewModel.state {
+            return message
+        }
+        return nil
     }
 
     private func evaluateOnboardingPresentation() {

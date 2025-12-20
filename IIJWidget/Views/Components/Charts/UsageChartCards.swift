@@ -28,7 +28,7 @@ struct MonthlyUsageChartCard: View {
     }
 
     var body: some View {
-        DashboardCard(title: "月別データ利用量", subtitle: "直近6か月 (GB)") {
+        DashboardCard(title: "月別データ利用量", subtitle: "直近7か月 (GB)") {
             if indexedPoints.isEmpty {
                 ChartPlaceholder(text: "まだデータがありません")
             } else {
@@ -58,7 +58,7 @@ struct MonthlyUsageChartCard: View {
                 BarMark(
                     x: .value("月インデックス", centeredValue(for: entry.index)),
                     y: .value("合計(GB)", animatedValue(entry.point.value)),
-                    width: .fixed(28)
+                    width: .fixed(barWidth)
                 )
                 .foregroundStyle(
                     LinearGradient(
@@ -129,6 +129,13 @@ struct MonthlyUsageChartCard: View {
 
     private var axisPositions: [Double] {
         indexedPoints.map { centeredValue(for: $0.index) }
+    }
+
+    private var barWidth: CGFloat {
+        let totalCount = max(1, indexedPoints.count)
+        let availableWidth: CGFloat = 260
+        let computed = availableWidth / CGFloat(totalCount)
+        return max(4, min(20, computed))
     }
 
     private var chartSelectionBinding: Binding<Double?> {

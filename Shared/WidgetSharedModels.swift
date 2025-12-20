@@ -105,15 +105,15 @@ enum AccentPalette: String, CaseIterable, Identifiable, Codable {
             ]
         case .sunset:
             return [
-                Color(red: 0.99, green: 0.61, blue: 0.30),
-                Color(red: 0.90, green: 0.21, blue: 0.28)
+                Color(red: 0.90, green: 0.21, blue: 0.28),
+                Color(red: 0.99, green: 0.61, blue: 0.30)
             ]
         case .graphite:
             return [
-                Color(dynamicGraphiteLight: UIColor(red: 0.42, green: 0.45, blue: 0.50, alpha: 1),
-                      dark: UIColor(white: 0.90, alpha: 1)),
                 Color(dynamicGraphiteLight: UIColor(red: 0.23, green: 0.26, blue: 0.30, alpha: 1),
-                      dark: UIColor(white: 0.78, alpha: 1))
+                      dark: UIColor(white: 0.78, alpha: 1)),
+                Color(dynamicGraphiteLight: UIColor(red: 0.42, green: 0.45, blue: 0.50, alpha: 1),
+                      dark: UIColor(white: 0.90, alpha: 1))
             ]
         case .forest:
             return [
@@ -122,13 +122,13 @@ enum AccentPalette: String, CaseIterable, Identifiable, Codable {
             ]
         case .sakura:
             return [
-                Color(red: 0.97, green: 0.72, blue: 0.83),
-                Color(red: 0.83, green: 0.54, blue: 0.91)
+                Color(red: 0.83, green: 0.54, blue: 0.91),
+                Color(red: 0.97, green: 0.72, blue: 0.83)
             ]
         case .citrus:
             return [
-                Color(red: 0.98, green: 0.82, blue: 0.31),
-                Color(red: 0.99, green: 0.55, blue: 0.21)
+                Color(red: 0.99, green: 0.55, blue: 0.21),
+                Color(red: 0.98, green: 0.82, blue: 0.31)
             ]
         case .midnight:
             return [
@@ -137,8 +137,8 @@ enum AccentPalette: String, CaseIterable, Identifiable, Codable {
             ]
         case .sand:
             return [
-                Color(red: 0.94, green: 0.86, blue: 0.70),
-                Color(red: 0.92, green: 0.74, blue: 0.48)
+                Color(red: 0.92, green: 0.74, blue: 0.48),
+                Color(red: 0.94, green: 0.86, blue: 0.70)
             ]
         case .coral:
             return [
@@ -162,8 +162,8 @@ enum AccentPalette: String, CaseIterable, Identifiable, Codable {
             ]
         case .gold:
             return [
-                Color(red: 1.00, green: 0.84, blue: 0.00),
-                Color(red: 1.00, green: 0.68, blue: 0.26)
+                Color(red: 1.00, green: 0.68, blue: 0.26),
+                Color(red: 1.00, green: 0.84, blue: 0.00)
             ]
         case .emerald:
             return [
@@ -197,8 +197,8 @@ enum AccentPalette: String, CaseIterable, Identifiable, Codable {
             ]
         case .crimson:
             return [
-                Color(red: 0.86, green: 0.08, blue: 0.24),
-                Color(red: 0.70, green: 0.15, blue: 0.25)
+                Color(red: 0.70, green: 0.15, blue: 0.25),
+                Color(red: 0.86, green: 0.08, blue: 0.24)
             ]
         case .lime:
             return [

@@ -1,22 +1,30 @@
 import SwiftUI
 
 struct StateFeedbackBanner: View {
-    let state: AppViewModel.LoadState
+    let message: String
+    let onDismiss: () -> Void
 
-    @ViewBuilder
     var body: some View {
-        if case .failed(let message, _) = state {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                Text(message)
-                    .font(.footnote)
-                    .lineLimit(2)
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(message)
+                .font(.footnote)
+                .lineLimit(2)
+                .layoutPriority(1)
+            Spacer(minLength: 8)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .padding(6)
+                    .contentShape(Rectangle())
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color.red.opacity(0.9), in: Capsule())
+            .buttonStyle(.plain)
+            .accessibilityLabel("閉じる")
         }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.red.opacity(0.9), in: Capsule())
     }
 }
 

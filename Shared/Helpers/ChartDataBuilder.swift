@@ -69,7 +69,7 @@ func monthlyChartPoints(from services: [MonthlyUsageService]) -> [UsageChartPoin
         )
     }
     let sorted = points.sorted { $0.sortKey < $1.sortKey }
-    return Array(sorted.suffix(6))
+    return Array(sorted.suffix(7))
 }
 
 func dailyChartPoints(from services: [DailyUsageService]) -> [UsageChartPoint] {
@@ -115,7 +115,7 @@ func billingChartPoints(from bill: BillSummaryResponse) -> [BillChartPoint] {
         )
     }
     let sorted = points.sorted { $0.sortKey < $1.sortKey }
-    return Array(sorted.suffix(6))
+    return Array(sorted.suffix(7))
 }
 
 func billingAxisLabel(for point: BillChartPoint) -> String {

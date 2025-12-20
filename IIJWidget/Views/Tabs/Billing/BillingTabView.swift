@@ -107,7 +107,7 @@ struct BillingBarChart: View {
     }
 
     var body: some View {
-        DashboardCard(title: "請求額の推移", subtitle: "直近6か月") {
+        DashboardCard(title: "請求額の推移", subtitle: "直近7か月") {
             if indexedPoints.isEmpty {
                 ChartPlaceholder(text: "データが不足しています")
             } else {
@@ -115,12 +115,13 @@ struct BillingBarChart: View {
                     BarMark(
                         x: .value("月インデックス", centeredValue(for: entry.index)),
                         y: .value("金額(¥)", animatedValue(entry.point.value)),
-                        width: .fixed(36)
+                        width: .fixed(barWidth)
                     )
                     .foregroundStyle(entry.point.isUnpaid ? unpaidGradient : paidGradient)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .annotation(position: .top) {
-                        Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
-                            .font(.caption2)
+                    Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
+                        .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -155,12 +156,12 @@ struct BillingBarChart: View {
     }
 
     private var paidGradient: LinearGradient {
-        let colors = accentColors.palette(for: .billingChart).chartGradient
+        let colors = accentColors.palette(for: .billingChart).secondaryChartGradient
         return LinearGradient(colors: colors, startPoint: .bottom, endPoint: .top)
     }
 
     private var unpaidGradient: LinearGradient {
-        let base = accentColors.palette(for: .billingChart).chartGradient
+        let base = accentColors.palette(for: .billingChart).secondaryChartGradient
         let tinted: [Color] = [
             base.first?.opacity(0.6) ?? .orange.opacity(0.7),
             Color.red.opacity(0.9)
@@ -170,6 +171,13 @@ struct BillingBarChart: View {
 
     private var axisPositions: [Double] {
         indexedPoints.map { centeredValue(for: $0.index) }
+    }
+
+    private var barWidth: CGFloat {
+        let totalCount = max(1, indexedPoints.count)
+        let availableWidth: CGFloat = 260
+        let computed = availableWidth / CGFloat(totalCount)
+        return max(4, min(20, computed))
     }
 
     private func centeredValue(for index: Int) -> Double {
