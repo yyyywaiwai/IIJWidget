@@ -2,7 +2,7 @@ import Foundation
 
 enum MockPayloadProvider {
     static let credentials = Credentials(
-        mioId: "iiyokoiyo@yajyusenp.ai",
+        mioId: "iiyokoiyo@example.com",
         password: "810"
     )
 
