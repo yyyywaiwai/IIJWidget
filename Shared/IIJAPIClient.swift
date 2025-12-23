@@ -143,6 +143,7 @@ final class IIJAPIClient {
             method: "POST",
             body: try JSONSerialization.data(withJSONObject: payload, options: [])
         )
+        recordAPIRawResponse(title: "member/login", path: "/api/member/login", rawData: data)
         if let errorCode = try decodeAPIErrorIfNeeded(from: data) {
             throw NSError(
                 domain: "IIJAPI",
@@ -545,6 +546,18 @@ final class IIJAPIClient {
     private func recordAPIResponse<T: Encodable>(title: String, path: String, rawData: Data, model: T) {
         let rawText = DebugPrettyFormatter.utf8String(from: rawData)
         let formatted = DebugPrettyFormatter.prettyJSONString(model)
+        debugStore.appendResponse(
+            title: title,
+            path: path,
+            category: .api,
+            rawText: rawText,
+            formattedText: formatted
+        )
+    }
+
+    private func recordAPIRawResponse(title: String, path: String, rawData: Data) {
+        let rawText = DebugPrettyFormatter.utf8String(from: rawData)
+        let formatted = DebugPrettyFormatter.prettyJSON(from: rawData)
         debugStore.appendResponse(
             title: title,
             path: path,

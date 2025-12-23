@@ -246,6 +246,7 @@ struct OnboardingCredentialSetupStep: View {
     @FocusState private var field: Field?
     @State private var isSubmitting = false
     @State private var loginErrorMessage: String?
+    @State private var isShowingDebugTools = false
 
     private enum Field: Hashable {
         case mioId
@@ -289,12 +290,23 @@ struct OnboardingCredentialSetupStep: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
 
                         if let loginErrorMessage {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                Text(loginErrorMessage)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.circle.fill")
+                                    Text(loginErrorMessage)
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.red)
+
+                                Button {
+                                    isShowingDebugTools = true
+                                } label: {
+                                    Label("キャッシュ・レスポンス確認", systemImage: "ladybug")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.accentColor)
                             }
-                            .font(.caption)
-                            .foregroundStyle(.red)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 4)
                         }
@@ -332,6 +344,11 @@ struct OnboardingCredentialSetupStep: View {
                 .disabled(isSubmitting || !viewModel.canSubmit)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
+            }
+        }
+        .sheet(isPresented: $isShowingDebugTools) {
+            NavigationStack {
+                DebugToolsView()
             }
         }
     }

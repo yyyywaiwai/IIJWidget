@@ -41,6 +41,20 @@ enum DebugPrettyFormatter {
         return data.base64EncodedString()
     }
 
+    static func prettyJSON(from data: Data) -> String? {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data, options: []),
+            let prettyData = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys]
+            ),
+            let prettyString = String(data: prettyData, encoding: .utf8)
+        else {
+            return nil
+        }
+        return prettyString
+    }
+
     static func prettyJSONString<T: Encodable>(_ value: T) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
