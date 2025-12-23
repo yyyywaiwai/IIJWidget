@@ -180,17 +180,29 @@ extension MemberTopResponse.ServiceInfo {
     }
 
     var remainingDataGB: Double? {
-        let sorted = couponData?.sorted { (lhs, rhs) -> Bool in
-            (lhs.sequenceNo ?? 0) < (rhs.sequenceNo ?? 0)
+        guard let couponData else {
+            return 0
         }
-        if let positive = sorted?.first(where: { ($0.couponValue ?? 0) > 0 }) {
-            return positive.couponValue
+        let sum = couponData.reduce(0.0) { total, entry in
+            guard let sequenceNo = entry.sequenceNo, (0...3).contains(sequenceNo) else {
+                return total
+            }
+            return total + max(entry.couponValue ?? 0, 0)
         }
-        if let any = sorted?.first(where: { $0.couponValue != nil }) {
-            return max(any.couponValue ?? 0, 0)
+        return max(sum, 0)
+    }
+
+    var carryoverRemainingGB: Double {
+        guard let couponData else {
+            return 0
         }
-        // API が 0GB を表す場合でも couponData が欠落するケースがあるため、0 を返してウィジェット更新を継続させる
-        return 0
+        let sum = couponData.reduce(0.0) { total, entry in
+            guard let sequenceNo = entry.sequenceNo, (1...3).contains(sequenceNo) else {
+                return total
+            }
+            return total + max(entry.couponValue ?? 0, 0)
+        }
+        return max(sum, 0)
     }
 }
 

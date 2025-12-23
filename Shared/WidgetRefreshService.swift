@@ -284,6 +284,8 @@ struct WidgetRefreshService {
             return payload
         }
 
+        let totalCapacityWithCarryover = totalCapacity + primaryServiceInfo.carryoverRemainingGB
+
         // 既に当日行が存在する場合はそのまま
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -310,7 +312,7 @@ struct WidgetRefreshService {
         }
 
         // 残量差分から当日利用量を算出 (GB→MBは1000換算)
-        let usedTotalMB = max((totalCapacity - remaining) * 1000, 0)
+        let usedTotalMB = max((totalCapacityWithCarryover - remaining) * 1000, 0)
         let todayMB = max(usedTotalMB - pastMB, 0)
 
         // 当日行をプライマリサービスに追加
