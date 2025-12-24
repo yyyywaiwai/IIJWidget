@@ -214,46 +214,48 @@ final class IIJAPIClient {
         guard !landing.forms.isEmpty else { return [] }
 
         let forms = landing.forms
-        let servicesByCode = try await withThrowingTaskGroup(of: (String, MonthlyUsageService?).self) { group in
-            for form in forms {
-                group.addTask {
-                    guard let body = self.formURLEncoded([
-                        "hdoCode": form.hdoCode,
-                        "_csrf": form.csrfToken
-                    ]) else {
-                        return (form.hdoCode, nil)
-                    }
+        var services: [MonthlyUsageService] = []
 
-                    let response = try await self.request(
-                        path: "/service/setup/hdc/viewmonthlydata/",
-                        method: "POST",
-                        body: body,
-                        contentType: "application/x-www-form-urlencoded"
-                    )
-                    let detailHTML = String(data: response, encoding: .utf8) ?? DebugPrettyFormatter.utf8String(from: response)
-                    let detailParser = DataUsageHTMLParser(html: detailHTML)
-                    let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode)
-                    self.debugStore.appendResponse(
-                        title: "月次利用量 詳細 \(form.hdoCode)",
-                        path: "/service/setup/hdc/viewmonthlydata/ [POST]",
-                        category: .scraping,
-                        rawText: detailHTML,
-                        formattedText: service.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
-                    )
-                    return (form.hdoCode, service)
-                }
+        for form in forms {
+            guard let body = formURLEncoded([
+                "hdoCode": form.hdoCode,
+                "_csrf": form.csrfToken
+            ]) else {
+                continue
             }
 
-            var collected: [String: MonthlyUsageService] = [:]
-            for try await (code, service) in group {
+            do {
+                let response = try await request(
+                    path: "/service/setup/hdc/viewmonthlydata/",
+                    method: "POST",
+                    body: body,
+                    contentType: "application/x-www-form-urlencoded"
+                )
+                let detailHTML = String(data: response, encoding: .utf8) ?? DebugPrettyFormatter.utf8String(from: response)
+                let detailParser = DataUsageHTMLParser(html: detailHTML)
+                let service = detailParser.parseMonthlyService(hdoCode: form.hdoCode)
+                debugStore.appendResponse(
+                    title: "月次利用量 詳細 \(form.hdoCode)",
+                    path: "/service/setup/hdc/viewmonthlydata/ [POST]",
+                    category: .scraping,
+                    rawText: detailHTML,
+                    formattedText: service.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
+                )
                 if let service {
-                    collected[code] = service
+                    services.append(service)
                 }
+            } catch {
+                debugStore.appendResponse(
+                    title: "月次利用量 詳細 (取得失敗) \(form.hdoCode)",
+                    path: "/service/setup/hdc/viewmonthlydata/ [POST]",
+                    category: .scraping,
+                    rawText: error.localizedDescription,
+                    formattedText: nil
+                )
             }
-            return collected
         }
 
-        return forms.compactMap { servicesByCode[$0.hdoCode] }
+        return services
     }
 
     private func fetchDailyUsage(dailyFetchMode: DailyFetchMode) async throws -> [DailyUsageService] {
@@ -281,37 +283,39 @@ final class IIJAPIClient {
         guard !landing.forms.isEmpty else { return [] }
 
         let forms = landing.forms
-        let servicesByCode = try await withThrowingTaskGroup(of: (String, DailyUsageService?).self) { group in
-            for form in forms {
-                group.addTask {
-                    guard let detailHTML = try await self.requestDailyDetailHTML(hdoCode: form.hdoCode, csrfToken: form.csrfToken) else {
-                        return (form.hdoCode, nil)
-                    }
+        var services: [DailyUsageService] = []
 
-                    let detailParser = DataUsageHTMLParser(html: detailHTML)
-                    let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode)
-                    let merged = baseService.map { self.mergeDailyServices(primary: $0, overlay: previewServices[form.hdoCode]) }
-                    self.debugStore.appendResponse(
-                        title: "日次利用量 詳細 \(form.hdoCode)",
-                        path: "/service/setup/hdc/viewdailydata/ [POST]",
-                        category: .scraping,
-                        rawText: detailHTML,
-                        formattedText: merged.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
-                    )
-                    return (form.hdoCode, merged)
+        for form in forms {
+            do {
+                guard let detailHTML = try await requestDailyDetailHTML(hdoCode: form.hdoCode, csrfToken: form.csrfToken) else {
+                    continue
                 }
-            }
 
-            var collected: [String: DailyUsageService] = [:]
-            for try await (code, service) in group {
-                if let service {
-                    collected[code] = service
+                let detailParser = DataUsageHTMLParser(html: detailHTML)
+                let baseService = detailParser.parseDailyService(hdoCode: form.hdoCode)
+                let merged = baseService.map { mergeDailyServices(primary: $0, overlay: previewServices[form.hdoCode]) }
+                debugStore.appendResponse(
+                    title: "日次利用量 詳細 \(form.hdoCode)",
+                    path: "/service/setup/hdc/viewdailydata/ [POST]",
+                    category: .scraping,
+                    rawText: detailHTML,
+                    formattedText: merged.flatMap { DebugPrettyFormatter.prettyJSONString($0) }
+                )
+                if let merged {
+                    services.append(merged)
                 }
+            } catch {
+                debugStore.appendResponse(
+                    title: "日次利用量 詳細 (取得失敗) \(form.hdoCode)",
+                    path: "/service/setup/hdc/viewdailydata/ [POST]",
+                    category: .scraping,
+                    rawText: error.localizedDescription,
+                    formattedText: nil
+                )
             }
-            return collected
         }
 
-        return forms.compactMap { servicesByCode[$0.hdoCode] }
+        return services
     }
 
     private func requestDailyDetailHTML(hdoCode: String, csrfToken: String) async throws -> String? {
@@ -376,8 +380,16 @@ final class IIJAPIClient {
             throw IIJAPIClientError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let bodySnippet = String(data: data, encoding: .utf8) ?? "(non-UTF8 body)"
-            print("[IIJAPI] HTTP \(httpResponse.statusCode) for \(method) \(url.absoluteString)\nRequest headers: \(request.allHTTPHeaderFields ?? [:])\nResponse: \(bodySnippet.prefix(500))")
+            let bodyText = DebugPrettyFormatter.utf8String(from: data)
+            let category: DebugResponseRecord.Category = path.hasPrefix("/api/") ? .api : .scraping
+            debugStore.appendResponse(
+                title: "HTTP \(httpResponse.statusCode) \(method)",
+                path: path,
+                category: category,
+                rawText: bodyText,
+                formattedText: nil
+            )
+            print("[IIJAPI] HTTP \(httpResponse.statusCode) for \(method) \(url.absoluteString)\nRequest headers: \(request.allHTTPHeaderFields ?? [:])\nResponse: \(bodyText.prefix(500))")
             throw IIJAPIClientError.httpError(httpResponse.statusCode)
         }
         return data
