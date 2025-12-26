@@ -278,20 +278,33 @@ struct WidgetRefreshService {
 
     private func adjustTodayUsage(in payload: AggregatePayload) -> AggregatePayload {
         guard let primaryServiceInfo = payload.top.serviceInfoList.first,
-              let totalCapacity = primaryServiceInfo.totalCapacity,
-              let remaining = primaryServiceInfo.remainingDataGB,
               !payload.dailyUsage.isEmpty else {
             return payload
         }
 
-        let totalCapacityWithCarryover = totalCapacity + primaryServiceInfo.carryoverRemainingGB
-
-        // 既に当日行が存在する場合はそのまま
         let calendar = Calendar.current
+        let couponMetrics = resolveCouponMetrics(for: primaryServiceInfo, calendar: calendar)
+        let remaining = couponMetrics.remaining
+
+        let totalCapacityBase = resolveTotalCapacity(primary: primaryServiceInfo, services: payload.top.serviceInfoList)
+        guard totalCapacityBase > 0 else { return payload }
+        let totalCapacityWithCarryover = totalCapacityBase + couponMetrics.carryover
+
         let today = calendar.startOfDay(for: Date())
-        if payload.dailyUsage.contains(where: { service in
-            service.entries.contains { isSameDay(label: $0.dateLabel, reference: today, calendar: calendar) }
-        }) {
+        func isTodayEntry(_ label: String) -> Bool {
+            if isSameDay(label: label, reference: today, calendar: calendar) {
+                return true
+            }
+            let normalized = label.replacingOccurrences(of: " ", with: "")
+            return normalized.contains("当日") || normalized.contains("本日") || normalized.contains("今日")
+        }
+
+        let hasConcreteToday = payload.dailyUsage.contains { service in
+            service.entries.contains { entry in
+                entry.hasData && isTodayEntry(entry.dateLabel)
+            }
+        }
+        if hasConcreteToday {
             return payload
         }
 
@@ -301,6 +314,7 @@ struct WidgetRefreshService {
         let pastMB = payload.dailyUsage.reduce(0.0) { serviceSum, service in
             serviceSum + service.entries.reduce(0.0) { entrySum, entry in
                 guard entry.hasData,
+                      !isTodayEntry(entry.dateLabel),
                       let entryDate = parsedDate(from: entry.dateLabel, calendar: calendar),
                       calendar.component(.month, from: entryDate) == currentMonth,
                       calendar.component(.year, from: entryDate) == currentYear,
@@ -316,12 +330,17 @@ struct WidgetRefreshService {
         let todayMB = max(usedTotalMB - pastMB, 0)
 
         // 当日行をプライマリサービスに追加
-        var services = payload.dailyUsage
-        guard var primaryDaily = services.first else { return payload }
-
-        var filtered = primaryDaily.entries.filter {
-            !isSameDay(label: $0.dateLabel, reference: today, calendar: calendar)
+        var services = payload.dailyUsage.map { service in
+            let filteredEntries = service.entries.filter { !isTodayEntry($0.dateLabel) }
+            return DailyUsageService(
+                hdoCode: service.hdoCode,
+                titlePrimary: service.titlePrimary,
+                titleDetail: service.titleDetail,
+                entries: filteredEntries
+            )
         }
+        guard var primaryDaily = services.first else { return payload }
+        var filtered = primaryDaily.entries
 
         let dateFormatter = DateFormatter()
         dateFormatter.calendar = calendar
@@ -369,6 +388,97 @@ struct WidgetRefreshService {
     private func isSameDay(label: String, reference: Date, calendar: Calendar) -> Bool {
         guard let date = parsedDate(from: label, calendar: calendar) else { return false }
         return calendar.isDate(date, inSameDayAs: reference)
+    }
+
+    private func resolveTotalCapacity(
+        primary: MemberTopResponse.ServiceInfo,
+        services: [MemberTopResponse.ServiceInfo]
+    ) -> Double {
+        let primaryCapacity = primary.totalCapacity ?? 0
+        guard let primaryCoupons = primary.couponData, !primaryCoupons.isEmpty else {
+            return primaryCapacity
+        }
+
+        let signature = couponSignature(primaryCoupons)
+        let matchedCapacities = services.compactMap { service -> Double? in
+            guard let coupons = service.couponData, !coupons.isEmpty,
+                  couponSignature(coupons) == signature else {
+                return nil
+            }
+            return service.totalCapacity
+        }
+        let total = matchedCapacities.reduce(0, +)
+        return total > 0 ? total : primaryCapacity
+    }
+
+    private func resolveCouponMetrics(
+        for service: MemberTopResponse.ServiceInfo,
+        calendar: Calendar
+    ) -> (remaining: Double, carryover: Double) {
+        guard let coupons = service.couponData, !coupons.isEmpty else {
+            return (service.remainingDataGB ?? 0, 0)
+        }
+
+        let now = Date()
+        let currentKey = monthKey(from: now, calendar: calendar)
+        let nextDate = calendar.date(byAdding: .month, value: 1, to: now) ?? now
+        let nextKey = monthKey(from: nextDate, calendar: calendar)
+
+        var remaining = 0.0
+        var carryover = 0.0
+        var matched = false
+
+        for entry in coupons {
+            let value = max(entry.couponValue ?? 0, 0)
+            guard let entryMonth = entry.month.flatMap(parseMonthKey) else {
+                remaining += value
+                matched = true
+                continue
+            }
+            guard entryMonth >= currentKey && entryMonth <= nextKey else { continue }
+            remaining += value
+            matched = true
+            if entryMonth == currentKey {
+                carryover += value
+            }
+        }
+
+        if !matched {
+            remaining = service.remainingDataGB ?? 0
+            carryover = 0
+        }
+
+        return (remaining: max(remaining, 0), carryover: max(carryover, 0))
+    }
+
+    private func monthKey(from date: Date, calendar: Calendar) -> Int {
+        let year = calendar.component(.year, from: date)
+        let month = calendar.component(.month, from: date)
+        return year * 100 + month
+    }
+
+    private func parseMonthKey(_ month: String) -> Int? {
+        let digits = month.filter { $0.isNumber }
+        guard digits.count >= 6, let value = Int(digits.prefix(6)) else { return nil }
+        return value
+    }
+
+    private func couponSignature(_ coupons: [MemberTopResponse.ServiceInfo.CouponEntry]) -> String {
+        let sorted = coupons.sorted { lhs, rhs in
+            let lhsSeq = lhs.sequenceNo ?? -1
+            let rhsSeq = rhs.sequenceNo ?? -1
+            if lhsSeq != rhsSeq {
+                return lhsSeq < rhsSeq
+            }
+            return (lhs.month ?? "") < (rhs.month ?? "")
+        }
+        return sorted.map { entry in
+            let sequence = entry.sequenceNo.map(String.init) ?? "-"
+            let month = entry.month ?? "-"
+            let value = entry.couponValue.map { String(format: "%.4f", $0) } ?? "-"
+            let adjustment = entry.adjustmentCoupon == true ? "1" : "0"
+            return "\(sequence):\(month):\(value):\(adjustment)"
+        }.joined(separator: "|")
     }
 
     private func parsedDate(from label: String, calendar: Calendar) -> Date? {

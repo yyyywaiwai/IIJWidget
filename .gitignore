@@ -41,3 +41,4 @@ Tools/IIJFetcher/.build/
 *.swp
 build.log
 buildServer.json
+resp_log

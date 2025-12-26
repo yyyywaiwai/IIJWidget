@@ -184,7 +184,7 @@ extension MemberTopResponse.ServiceInfo {
             return 0
         }
         let sum = couponData.reduce(0.0) { total, entry in
-            guard let sequenceNo = entry.sequenceNo, (0...3).contains(sequenceNo) else {
+            guard let sequenceNo = entry.sequenceNo, (0...4).contains(sequenceNo) else {
                 return total
             }
             return total + max(entry.couponValue ?? 0, 0)
@@ -197,7 +197,7 @@ extension MemberTopResponse.ServiceInfo {
             return 0
         }
         let sum = couponData.reduce(0.0) { total, entry in
-            guard let sequenceNo = entry.sequenceNo, (1...3).contains(sequenceNo) else {
+            guard let sequenceNo = entry.sequenceNo, (1...4).contains(sequenceNo) else {
                 return total
             }
             return total + max(entry.couponValue ?? 0, 0)
