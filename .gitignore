@@ -42,3 +42,4 @@ Tools/IIJFetcher/.build/
 build.log
 buildServer.json
 resp_log
+.gemini-clipboard

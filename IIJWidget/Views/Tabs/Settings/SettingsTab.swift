@@ -20,7 +20,14 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("使いすぎアラート")) {
+                Section(header: HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("使いすぎアラート")
+                    InfoTipButton(
+                        message: usageAlertHintText,
+                        accessibilityLabel: "使いすぎアラートのヒント"
+                    )
+                    Spacer(minLength: 0)
+                }) {
                     Toggle(isOn: Binding(
                         get: { viewModel.usageAlertSettings.isEnabled },
                         set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(isEnabled: $0)) }
@@ -106,8 +113,14 @@ struct SettingsTab: View {
                         get: { viewModel.displayPreferences.calculateTodayFromRemaining },
                         set: { viewModel.updateCalculateTodayFromRemaining($0) }
                     )) {
-                        Text("当日利用量をデータ残量から計算する")
-                            .foregroundStyle(accentColor)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("当日利用量をデータ残量から計算する")
+                                .foregroundStyle(accentColor)
+                            InfoTipButton(
+                                message: calculateTodayHintText,
+                                accessibilityLabel: "当日利用量計算のヒント"
+                            )
+                        }
                     }
                     .toggleStyle(.switch)
                     .tint(accentColor)
@@ -229,15 +242,25 @@ private extension SettingsTab {
             NavigationLink {
                 DebugToolsView()
             } label: {
-                Label("キャッシュ・レスポンス確認", systemImage: "ladybug")
-                    .foregroundStyle(accentColor)
+                DebugHintRow(
+                    title: "キャッシュ・レスポンス確認",
+                    systemImage: "ladybug",
+                    hintText: debugResponseHintText,
+                    hintAccessibilityLabel: "キャッシュ・レスポンス確認のヒント",
+                    accentColor: accentColor
+                )
             }
 
             NavigationLink {
                 RefreshLogView()
             } label: {
-                Label("リフレッシュログを確認", systemImage: "doc.text.magnifyingglass")
-                    .foregroundStyle(accentColor)
+                DebugHintRow(
+                    title: "リフレッシュログを確認",
+                    systemImage: "doc.text.magnifyingglass",
+                    hintText: refreshLogHintText,
+                    hintAccessibilityLabel: "リフレッシュログのヒント",
+                    accentColor: accentColor
+                )
             }
         }
     }
@@ -320,3 +343,65 @@ private struct AccentPaletteSwatch: View {
             )
     }
 }
+
+private struct InfoTipButton: View {
+    let message: String
+    let accessibilityLabel: String
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .popover(isPresented: $isPresented) {
+            InfoTipPopover(text: message)
+                .presentationCompactAdaptation(.popover)
+        }
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("ヒントを表示")
+    }
+}
+
+private struct DebugHintRow: View {
+    let title: String
+    let systemImage: String
+    let hintText: String
+    let hintAccessibilityLabel: String
+    let accentColor: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Label(title, systemImage: systemImage)
+                .foregroundStyle(accentColor)
+            InfoTipButton(
+                message: hintText,
+                accessibilityLabel: hintAccessibilityLabel
+            )
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct InfoTipPopover: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundStyle(Color.primary)
+            .multilineTextAlignment(.leading)
+            .padding(12)
+            .frame(maxWidth: 260, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private let usageAlertHintText = "設定したMBを超えると、月別/日別のグラフと一覧が警告色で強調表示されます。"
+private let calculateTodayHintText = "ONにすると日別の取得は30日表のみとなり、当日分はデータ残量の差分から補完します。"
+private let debugResponseHintText = "直近のAPIレスポンスをキャッシュから確認できます。"
+private let refreshLogHintText = "更新の実行履歴と結果を確認できます。"
