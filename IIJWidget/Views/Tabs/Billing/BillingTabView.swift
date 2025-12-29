@@ -1,5 +1,5 @@
-import SwiftUI
 import Charts
+import SwiftUI
 
 struct BillingTabView: View {
     @ObservedObject var viewModel: AppViewModel
@@ -11,22 +11,23 @@ struct BillingTabView: View {
         ScrollView {
             VStack(spacing: 20) {
                 if let bill {
-                    BillingHighlightCard(bill: bill)
-                    if let latest = bill.latestEntry {
-                        Button {
-                            presentedEntry = latest
-                        } label: {
-                            Label("最新の請求明細を表示", systemImage: "doc.text.magnifyingglass")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
+                    BillingHighlightCard(bill: bill) { entry in
+                        presentedEntry = entry
                     }
                     BillingBarChart(bill: bill, accentColors: accentColors)
                     BillSummaryList(bill: bill) { entry in
                         presentedEntry = entry
                     }
-                        .padding()
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .padding()
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        if #available(iOS 26.0, *) {
+                            Color.clear
+                                .glassEffect(.regular, in: shape)
+                        } else {
+                            shape.fill(.thinMaterial)
+                        }
+                    }
                 } else {
                     EmptyStateView(text: "請求データがまだ取得されていません。")
                 }
@@ -46,41 +47,78 @@ struct BillingTabView: View {
 
 struct BillingHighlightCard: View {
     let bill: BillSummaryResponse
+    let onSelect: ((BillSummaryResponse.BillEntry) -> Void)?
+
+    init(bill: BillSummaryResponse, onSelect: ((BillSummaryResponse.BillEntry) -> Void)? = nil) {
+        self.bill = bill
+        self.onSelect = onSelect
+    }
 
     var body: some View {
         if let latest = bill.latestEntry {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("\(latest.formattedMonth)のご請求")
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
-
-                Text(latest.formattedAmount)
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.6)
-
-                if latest.isUnpaid == true {
-                    Text("未払い")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.white)
+            if let onSelect {
+                Button {
+                    onSelect(latest)
+                } label: {
+                    highlightCard(for: latest, isInteractive: true)
                 }
+                .buttonStyle(.plain)
+            } else {
+                highlightCard(for: latest, isInteractive: false)
             }
-            .padding()
-            .frame(maxWidth: .infinity, minHeight: 180, alignment: .leading)
-            .background(
-                LinearGradient(
-                    colors: [Color.indigo, Color.blue],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 24)
-            )
         } else {
-            DashboardCard(title: "直近の請求額") {
+            DashboardCard(title: "直近のご請求") {
                 ChartPlaceholder(text: "請求データがありません")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func highlightCard(for latest: BillSummaryResponse.BillEntry, isInteractive: Bool)
+        -> some View
+    {
+        DashboardCard(
+            title: "最新のご請求",
+            subtitle: latest.isUnpaid == true ? "未払いのご請求があります" : "\(latest.formattedMonth)分のご請求はこちらです"
+        ) {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(latest.formattedAmount)
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(latest.isUnpaid == true ? .red : .primary)
+                            .monospacedDigit()
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    if latest.isUnpaid == true {
+                        Label("未払い", systemImage: "exclamationmark.circle.fill")
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.1), in: Capsule())
+                    } else {
+                        Image(systemName: "creditcard.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.cyan.gradient)
+                            .padding(10)
+                            .background(Color.cyan.opacity(0.1), in: Circle())
+                    }
+
+                    if isInteractive {
+                        HStack(spacing: 4) {
+                            Text("詳細を見る")
+                                .font(.system(.caption2, design: .rounded, weight: .bold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(.caption2, weight: .heavy))
+                        }
+                        .foregroundStyle(.cyan)
+                    }
+                }
             }
         }
     }
@@ -120,16 +158,17 @@ struct BillingBarChart: View {
                     .foregroundStyle(entry.point.isUnpaid ? unpaidGradient : paidGradient)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .annotation(position: .top) {
-                    Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
-                        .font(.caption2)
+                        Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .chartXAxis {
                     AxisMarks(values: axisPositions) { value in
                         if let doubleValue = value.as(Double.self),
-                           let index = index(from: doubleValue),
-                           indexedPoints.indices.contains(index) {
+                            let index = index(from: doubleValue),
+                            indexedPoints.indices.contains(index)
+                        {
                             AxisGridLine(centered: true)
                             AxisTick(centered: true)
                         }
@@ -164,7 +203,7 @@ struct BillingBarChart: View {
         let base = accentColors.palette(for: .billingChart).secondaryChartGradient
         let tinted: [Color] = [
             base.first?.opacity(0.6) ?? .orange.opacity(0.7),
-            Color.red.opacity(0.9)
+            Color.red.opacity(0.9),
         ]
         return LinearGradient(colors: tinted, startPoint: .bottom, endPoint: .top)
     }
@@ -272,31 +311,48 @@ struct BillSummaryList: View {
     }
 
     @ViewBuilder
-    private func rowContent(for entry: BillSummaryResponse.BillEntry, isInteractive: Bool) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+    private func rowContent(for entry: BillSummaryResponse.BillEntry, isInteractive: Bool)
+        -> some View
+    {
+        HStack(spacing: 12) {
+            let statusColor: Color = entry.isUnpaid == true ? .red : .blue
+
+            Image(systemName: entry.isUnpaid == true ? "exclamationmark.circle.fill" : "doc.text.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(statusColor)
+                .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(entry.formattedMonth)
-                    .font(.subheadline)
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
+
                 if entry.isUnpaid == true {
                     Text("未払い")
-                        .font(.caption)
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
                         .foregroundStyle(.red)
+                } else {
+                    Text("お支払い完了")
+                        .font(.system(.caption2, design: .rounded, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
             }
+
             Spacer()
+
             Text(entry.formattedAmount)
-                .font(.body.bold())
+                .font(.system(.body, design: .rounded, weight: .bold))
                 .monospacedDigit()
-                .foregroundStyle(.primary)
+                .foregroundStyle(entry.isUnpaid == true ? .red : .primary)
+
             if isInteractive {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(.tertiary)
             }
         }
         .contentShape(Rectangle())
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
     }
 }
 
@@ -313,7 +369,9 @@ struct BillDetailSheet: View {
         case failed(String)
     }
 
-    init(viewModel: AppViewModel, bill: BillSummaryResponse, initialEntry: BillSummaryResponse.BillEntry) {
+    init(
+        viewModel: AppViewModel, bill: BillSummaryResponse, initialEntry: BillSummaryResponse.BillEntry
+    ) {
         self.viewModel = viewModel
         self.entries = bill.billList
         _selectedEntry = State(initialValue: initialEntry)
@@ -321,39 +379,9 @@ struct BillDetailSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch loadState {
-                case .loading:
-                    ProgressView("読み込み中…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .failed(let message):
-                    VStack(spacing: 16) {
-                        Text("請求明細を取得できませんでした")
-                            .font(.headline)
-                        Text(message)
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                        Button("再読み込み") {
-                            Task { await loadDetail(for: selectedEntry) }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
-                case .loaded(let detail):
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            BillDetailSummaryView(detail: detail)
-                            if !detail.taxBreakdowns.isEmpty {
-                                BillTaxBreakdownView(breakdowns: detail.taxBreakdowns)
-                            }
-                            ForEach(detail.sections) { section in
-                                BillDetailSectionView(section: section)
-                            }
-                        }
-                        .padding()
-                    }
-                }
+            ZStack {
+                detailBackground
+                detailContent
             }
             .navigationTitle("\(selectedEntry.formattedMonth)の明細")
             .toolbar {
@@ -387,6 +415,54 @@ struct BillDetailSheet: View {
         }
         .task(id: selectedEntry.id) {
             await loadDetail(for: selectedEntry)
+        }
+    }
+
+    @ViewBuilder
+    private var detailBackground: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .ignoresSafeArea()
+        } else {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+        }
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        switch loadState {
+        case .loading:
+            ProgressView("読み込み中…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            VStack(spacing: 16) {
+                Text("請求明細を取得できませんでした")
+                    .font(.headline)
+                Text(message)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                Button("再読み込み") {
+                    Task { await loadDetail(for: selectedEntry) }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
+        case .loaded(let detail):
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    BillDetailSummaryView(detail: detail)
+                    if !detail.taxBreakdowns.isEmpty {
+                        BillTaxBreakdownView(breakdowns: detail.taxBreakdowns)
+                    }
+                    ForEach(detail.sections) { section in
+                        BillDetailSectionView(section: section)
+                    }
+                }
+                .padding()
+            }
         }
     }
 
@@ -424,7 +500,15 @@ struct BillDetailSummaryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .background {
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Color.blue.opacity(0.08)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
     }
 }
 
@@ -462,7 +546,15 @@ struct BillTaxBreakdownView: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background {
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Color(.secondarySystemBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
     }
 }
 
@@ -492,7 +584,15 @@ struct BillDetailSectionView: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background {
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Color(.systemBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
