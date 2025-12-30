@@ -34,12 +34,7 @@ struct BillingTabView: View {
                 .padding()
                 .background {
                   let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-                  if #available(iOS 26.0, *) {
-                    Color.clear
-                      .glassEffect(.regular, in: shape)
-                  } else {
-                    shape.fill(.thinMaterial)
-                  }
+                  shape.fill(.thinMaterial)
                 }
                 .frame(maxWidth: 400)
               }
@@ -54,12 +49,7 @@ struct BillingTabView: View {
               .padding()
               .background {
                 let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-                if #available(iOS 26.0, *) {
-                  Color.clear
-                    .glassEffect(.regular, in: shape)
-                } else {
-                  shape.fill(.thinMaterial)
-                }
+                shape.fill(.thinMaterial)
               }
             }
           } else {
@@ -472,14 +462,8 @@ struct BillDetailSheet: View {
 
   @ViewBuilder
   private var detailBackground: some View {
-    if #available(iOS 26.0, *) {
-      Color.clear
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .ignoresSafeArea()
-    } else {
-      Color(.systemGroupedBackground)
-        .ignoresSafeArea()
-    }
+    Color(.systemGroupedBackground)
+      .ignoresSafeArea()
   }
 
   @ViewBuilder
@@ -599,13 +583,8 @@ struct BillTaxBreakdownView: View {
     }
     .padding()
     .background {
-      if #available(iOS 26.0, *) {
-        Color.clear
-          .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-      } else {
-        Color(.secondarySystemBackground)
-          .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      }
+      Color(.secondarySystemBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
   }
 }
@@ -637,13 +616,8 @@ struct BillDetailSectionView: View {
     }
     .padding()
     .background {
-      if #available(iOS 26.0, *) {
-        Color.clear
-          .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-      } else {
-        Color(.systemBackground)
-          .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      }
+      Color(.systemBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
   }
