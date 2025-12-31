@@ -400,6 +400,7 @@ private extension Color {
 struct DisplayPreferences: Codable, Equatable {
     var defaultUsageChart: UsageChartDefault
     var showsLowSpeedUsage: Bool
+    var showsBillingChart: Bool
     var calculateTodayFromRemaining: Bool
     var hidePhoneOnScreenshot: Bool
 
@@ -408,11 +409,13 @@ struct DisplayPreferences: Codable, Equatable {
     init(
         defaultUsageChart: UsageChartDefault = .monthly,
         showsLowSpeedUsage: Bool = false,
+        showsBillingChart: Bool = false,
         calculateTodayFromRemaining: Bool = true,
         hidePhoneOnScreenshot: Bool = true
     ) {
         self.defaultUsageChart = defaultUsageChart
         self.showsLowSpeedUsage = showsLowSpeedUsage
+        self.showsBillingChart = showsBillingChart
         self.calculateTodayFromRemaining = calculateTodayFromRemaining
         self.hidePhoneOnScreenshot = hidePhoneOnScreenshot
     }
@@ -420,6 +423,7 @@ struct DisplayPreferences: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultUsageChart
         case showsLowSpeedUsage
+        case showsBillingChart
         case calculateTodayFromRemaining
         case hidePhoneOnScreenshot
     }
@@ -428,6 +432,7 @@ struct DisplayPreferences: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         defaultUsageChart = try container.decodeIfPresent(UsageChartDefault.self, forKey: .defaultUsageChart) ?? .monthly
         showsLowSpeedUsage = try container.decodeIfPresent(Bool.self, forKey: .showsLowSpeedUsage) ?? false
+        showsBillingChart = try container.decodeIfPresent(Bool.self, forKey: .showsBillingChart) ?? false
         calculateTodayFromRemaining = try container.decodeIfPresent(Bool.self, forKey: .calculateTodayFromRemaining) ?? true
         hidePhoneOnScreenshot = try container.decodeIfPresent(Bool.self, forKey: .hidePhoneOnScreenshot) ?? true
     }
@@ -436,6 +441,7 @@ struct DisplayPreferences: Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(defaultUsageChart, forKey: .defaultUsageChart)
         try container.encode(showsLowSpeedUsage, forKey: .showsLowSpeedUsage)
+        try container.encode(showsBillingChart, forKey: .showsBillingChart)
         try container.encode(calculateTodayFromRemaining, forKey: .calculateTodayFromRemaining)
         try container.encode(hidePhoneOnScreenshot, forKey: .hidePhoneOnScreenshot)
     }

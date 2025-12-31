@@ -110,6 +110,16 @@ struct SettingsTab: View {
                     .tint(accentColor)
 
                     Toggle(isOn: Binding(
+                        get: { viewModel.displayPreferences.showsBillingChart },
+                        set: { viewModel.updateShowsBillingChart($0) }
+                    )) {
+                        Text("請求タブのグラフを表示")
+                            .foregroundStyle(accentColor)
+                    }
+                    .toggleStyle(.switch)
+                    .tint(accentColor)
+
+                    Toggle(isOn: Binding(
                         get: { viewModel.displayPreferences.calculateTodayFromRemaining },
                         set: { viewModel.updateCalculateTodayFromRemaining($0) }
                     )) {
@@ -138,8 +148,15 @@ struct SettingsTab: View {
 
                 Section(header: Text("プロジェクト")) {
                     if let repositoryURL {
-                        Link(destination: repositoryURL) {
-                            Label("GitHub リポジトリを開く", systemImage: "arrow.up.right.square")
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Link(destination: repositoryURL) {
+                                Label("GitHub リポジトリを開く", systemImage: "arrow.up.right.square")
+                            }
+                            InfoTipButton(
+                                message: repositoryHintText,
+                                accessibilityLabel: "GitHub リポジトリのヒント"
+                            )
+                            Spacer(minLength: 0)
                         }
                     }
                 }
@@ -403,5 +420,6 @@ private struct InfoTipPopover: View {
 
 private let usageAlertHintText = "設定したMBを超えると、月別/日別のグラフと一覧が警告色で強調表示されます。"
 private let calculateTodayHintText = "ONにすると日別の取得は30日表のみとなり、当日分はデータ残量の差分から補完します。"
+private let repositoryHintText = "このアプリはオープンソースです。MITライセンスの規約に従って自由にコードを利用できます"
 private let debugResponseHintText = "直近のAPIレスポンスをキャッシュから確認できます。"
 private let refreshLogHintText = "更新の実行履歴と結果を確認できます。"

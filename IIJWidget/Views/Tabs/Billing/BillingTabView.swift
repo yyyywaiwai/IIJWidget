@@ -5,6 +5,7 @@ struct BillingTabView: View {
   @ObservedObject var viewModel: AppViewModel
   let bill: BillSummaryResponse?
   let accentColors: AccentColorSettings
+  let showsBillingChart: Bool
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @State private var presentedEntry: BillSummaryResponse.BillEntry?
 
@@ -24,7 +25,9 @@ struct BillingTabView: View {
                   BillingHighlightCard(bill: bill) { entry in
                     presentedEntry = entry
                   }
-                  BillingBarChart(bill: bill, accentColors: accentColors)
+                  if showsBillingChart {
+                    BillingBarChart(bill: bill, accentColors: accentColors)
+                  }
                 }
                 .frame(maxWidth: .infinity)
 
@@ -42,7 +45,9 @@ struct BillingTabView: View {
               BillingHighlightCard(bill: bill) { entry in
                 presentedEntry = entry
               }
-              BillingBarChart(bill: bill, accentColors: accentColors)
+              if showsBillingChart {
+                BillingBarChart(bill: bill, accentColors: accentColors)
+              }
               BillSummaryList(bill: bill) { entry in
                 presentedEntry = entry
               }

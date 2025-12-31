@@ -92,6 +92,12 @@ final class AppViewModel: ObservableObject {
         displayPreferenceStore.save(displayPreferences)
     }
 
+    func updateShowsBillingChart(_ newValue: Bool) {
+        guard displayPreferences.showsBillingChart != newValue else { return }
+        displayPreferences.showsBillingChart = newValue
+        displayPreferenceStore.save(displayPreferences)
+    }
+
     func updateCalculateTodayFromRemaining(_ newValue: Bool) {
         guard displayPreferences.calculateTodayFromRemaining != newValue else { return }
         displayPreferences.calculateTodayFromRemaining = newValue

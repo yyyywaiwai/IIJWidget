@@ -33,7 +33,12 @@ struct MainTabView: View {
                 .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }
                 .tag(AppSection.usage)
 
-                BillingTabView(viewModel: viewModel, bill: payload?.bill, accentColors: viewModel.accentColors)
+                BillingTabView(
+                    viewModel: viewModel,
+                    bill: payload?.bill,
+                    accentColors: viewModel.accentColors,
+                    showsBillingChart: viewModel.displayPreferences.showsBillingChart
+                )
                     .tabItem { Label(AppSection.billing.title, systemImage: AppSection.billing.iconName) }
                     .tag(AppSection.billing)
 
