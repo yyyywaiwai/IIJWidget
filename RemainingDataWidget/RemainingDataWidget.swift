@@ -167,10 +167,11 @@ struct RemainingDataWidgetEntryView: View {
             } else if isRefreshing {
                 refreshingCircular
             } else if let service = entry.snapshot?.primaryService {
+                let valueFontSize: CGFloat = 11
                 Gauge(value: service.remainingGB, in: 0...service.totalCapacityGB) {
-                    Text("残")
+                    Text("GB")
                 } currentValueLabel: {
-                    Text(shortGB(service.remainingGB))
+                    gbValueText(service.remainingGB, baseSize: valueFontSize, weight: .semibold)
                 }
                 .gaugeStyle(.accessoryCircular)
             } else {
@@ -195,7 +196,7 @@ struct RemainingDataWidgetEntryView: View {
         } else if isRefreshing {
             Text("更新中")
         } else if let service = entry.snapshot?.primaryService {
-            Text("残\(shortGB(service.remainingGB)) / \(shortGB(service.totalCapacityGB))")
+            inlineRemainingText(for: service)
         } else {
             Text("データ未取得")
         }
@@ -212,7 +213,7 @@ struct RemainingDataWidgetEntryView: View {
                     colors: ringColors(for: remainingRatio(for: service))
                 )
                 .frame(height: 8)
-                Text("残量 \(shortGB(service.remainingGB)) / \(shortGB(service.totalCapacityGB))")
+                Text("残量 \(formattedGBWithUnit(service.remainingGB)) / \(formattedGBWithUnit(service.totalCapacityGB))")
                     .font(.footnote)
             } else {
                 Text("IIJmioデータ未取得")
@@ -297,8 +298,7 @@ struct RemainingDataWidgetEntryView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if let service = entry.snapshot?.primaryService {
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("\(service.remainingGB, specifier: "%.2f")")
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                gbValueText(service.remainingGB, baseSize: 32, weight: .bold)
                                 Text("GB")
                                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                                     .foregroundStyle(.secondary)
@@ -372,10 +372,8 @@ struct RemainingDataWidgetEntryView: View {
                     ProgressView()
                         .scaleEffect(0.6)
                 } else {
-                    Text(shortGB(service.remainingGB))
-                        .font(.system(size: size * 0.22, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                    Text("残")
+                    gbValueText(service.remainingGB, baseSize: size * 0.22, weight: .bold)
+                    Text("GB")
                         .font(.system(size: size * 0.11, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -465,16 +463,31 @@ struct RemainingDataWidgetEntryView: View {
             .padding()
     }
 
-    private func shortGB(_ value: Double) -> String {
-        if value >= 10 {
-            return String(format: "%.0fGB", value)
-        } else {
-            return String(format: "%.1fGB", value)
-        }
+    private func formattedGBWithUnit(_ value: Double) -> String {
+        String(format: "%.2fGB", value)
     }
 
-    private func detailedGB(_ value: Double) -> String {
-        String(format: "%.2fGB", value)
+    private func inlineRemainingText(for service: WidgetServiceSnapshot) -> Text {
+        let baseSize: CGFloat = 12
+        let unitSize: CGFloat = baseSize * 0.85
+        return Text("残")
+            .font(.system(size: baseSize, weight: .semibold, design: .rounded))
+            + gbValueText(service.remainingGB, baseSize: baseSize, weight: .semibold)
+            + Text("GB / ")
+                .font(.system(size: unitSize, weight: .semibold, design: .rounded))
+            + gbValueText(service.totalCapacityGB, baseSize: baseSize, weight: .semibold)
+            + Text("GB")
+                .font(.system(size: unitSize, weight: .semibold, design: .rounded))
+    }
+
+    private func gbValueText(
+        _ value: Double,
+        baseSize: CGFloat,
+        weight: Font.Weight
+    ) -> Text {
+        Text(String(format: "%.2f", value))
+            .font(.system(size: baseSize, weight: weight, design: .rounded))
+            .monospacedDigit()
     }
 
     private func remainingRatio(for service: WidgetServiceSnapshot) -> Double {
