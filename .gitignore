@@ -43,3 +43,4 @@ build.log
 buildServer.json
 resp_log
 .gemini-clipboard
+coderabbit.yaml

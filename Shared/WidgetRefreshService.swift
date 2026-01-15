@@ -321,13 +321,21 @@ struct WidgetRefreshService {
                       !calendar.isDate(entryDate, inSameDayAs: today) else {
                     return entrySum
                 }
-                return entrySum + (entry.highSpeedMB ?? 0) + (entry.lowSpeedMB ?? 0)
+                return entrySum + (entry.highSpeedMB ?? 0)
             }
         }
 
-        // 残量差分から当日利用量を算出 (GB→MBは1000換算)
-        let usedTotalMB = max((totalCapacityWithCarryover - remaining) * 1000, 0)
-        let todayMB = max(usedTotalMB - pastMB, 0)
+        // 残量差分から当日利用量を算出 (GB→MBは1024換算)
+        let usedTotalMBFromRemaining = max((totalCapacityWithCarryover - remaining) * 1024, 0)
+        let todayMBFromRemaining = max(usedTotalMBFromRemaining - pastMB, 0)
+        let monthlyHighSpeedMB = resolveMonthlyHighSpeedMB(
+            from: payload,
+            year: currentYear,
+            month: currentMonth,
+            calendar: calendar
+        )
+        let todayMBFromMonthly = max(monthlyHighSpeedMB - pastMB, 0)
+        let todayMB = max(todayMBFromRemaining, todayMBFromMonthly)
 
         // 当日行をプライマリサービスに追加
         var services = payload.dailyUsage.map { service in
@@ -516,6 +524,77 @@ struct WidgetRefreshService {
         components.year = year
         components.month = month
         components.day = day
+        return calendar.date(from: components)
+    }
+
+    private func resolveMonthlyHighSpeedMB(
+        from payload: AggregatePayload,
+        year: Int,
+        month: Int,
+        calendar: Calendar
+    ) -> Double {
+        payload.monthlyUsage.reduce(0.0) { serviceSum, service in
+            serviceSum + service.entries.reduce(0.0) { entrySum, entry in
+                guard entry.hasData,
+                      let entryDate = parsedYearMonth(from: entry.monthLabel, calendar: calendar),
+                      calendar.component(.year, from: entryDate) == year,
+                      calendar.component(.month, from: entryDate) == month else {
+                    return entrySum
+                }
+                let roundedGB = max(entry.highSpeedGB ?? 0, 0)
+                let correctionGB = roundingCompensationGB(from: entry.highSpeedText)
+                return entrySum + (roundedGB + correctionGB) * 1024
+            }
+        }
+    }
+
+    private func roundingCompensationGB(from text: String?) -> Double {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return 0
+        }
+        let cleaned = text.replacingOccurrences(of: ",", with: "")
+        let numberPart = cleaned.prefix { character in
+            character.isNumber || character == "."
+        }
+        let parts = numberPart.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return 0 }
+        let decimalDigits = parts[1].count
+        guard decimalDigits > 0 else { return 0 }
+        let step = pow(10.0, -Double(decimalDigits))
+        return step / 2
+    }
+
+    private func parsedYearMonth(from label: String, calendar: Calendar) -> Date? {
+        let regex = try? NSRegularExpression(pattern: "\\d+")
+        let nsString = label as NSString
+        let matches = regex?.matches(in: label, range: NSRange(location: 0, length: nsString.length)) ?? []
+        let segments = matches.compactMap { Int(nsString.substring(with: $0.range)) }
+
+        guard !segments.isEmpty else { return nil }
+
+        var year = calendar.component(.year, from: Date())
+        var month: Int?
+
+        if segments.count >= 2 {
+            if let first = segments.first, first >= 1000 {
+                year = first
+                month = segments.dropFirst().first
+            } else if let last = segments.last, last >= 1000 {
+                year = last
+                month = segments.first
+            } else {
+                month = segments.first
+            }
+        } else if segments.count == 1 {
+            month = segments.first
+        }
+
+        guard let month else { return nil }
+
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = 1
         return calendar.date(from: components)
     }
 }
