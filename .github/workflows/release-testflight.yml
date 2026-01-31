@@ -22,6 +22,7 @@ jobs:
       - name: Notify Discord
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK_URL" ]; then
@@ -32,6 +33,17 @@ jobs:
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           COMMIT_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
           COMMIT_SHORT=${GITHUB_SHA:0:7}
+          COMMIT_MESSAGE=$(jq -r '.head_commit.message // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE=$(curl -sS \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" | jq -r '.commit.message // empty')
+          fi
+          COMMIT_MESSAGE_LINE=$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | cut -c1-120)
+          if [ -z "$COMMIT_MESSAGE_LINE" ]; then
+            COMMIT_MESSAGE_LINE="(no message)"
+          fi
 
           EMBED_TITLE="main への更新がありました"
           EMBED_DESCRIPTION="[Commit]($COMMIT_URL) · [Actions Run]($RUN_URL)"
@@ -39,10 +51,12 @@ jobs:
             --arg branch "$GITHUB_REF_NAME" \
             --arg actor "$GITHUB_ACTOR" \
             --arg commit "$COMMIT_SHORT" \
+            --arg message "$COMMIT_MESSAGE_LINE" \
             '[
               {name: "Branch", value: $branch, inline: true},
               {name: "Actor", value: $actor, inline: true},
-              {name: "Commit", value: $commit, inline: true}
+              {name: "Commit", value: $commit, inline: true},
+              {name: "Message", value: $message, inline: false}
             ]')
 
           PAYLOAD=$(jq -n \
