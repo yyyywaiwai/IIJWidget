@@ -39,12 +39,10 @@ jobs:
             --arg branch "$GITHUB_REF_NAME" \
             --arg actor "$GITHUB_ACTOR" \
             --arg commit "$COMMIT_SHORT" \
-            --arg note "ビルド/配布は実行しません" \
             '[
               {name: "Branch", value: $branch, inline: true},
               {name: "Actor", value: $actor, inline: true},
-              {name: "Commit", value: $commit, inline: true},
-              {name: "Note", value: $note, inline: false}
+              {name: "Commit", value: $commit, inline: true}
             ]')
 
           PAYLOAD=$(jq -n \

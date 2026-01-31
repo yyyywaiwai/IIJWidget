@@ -51,12 +51,10 @@ jobs:
               --arg pr "#$PR_NUMBER · $PR_TITLE" \
               --arg author "$PR_AUTHOR" \
               --arg commit "$COMMIT_SHORT" \
-              --arg note "ビルドは実行しません" \
               '[
                 {name: "PR", value: $pr, inline: false},
                 {name: "Author", value: $author, inline: true},
-                {name: "Commit", value: $commit, inline: true},
-                {name: "Note", value: $note, inline: true}
+                {name: "Commit", value: $commit, inline: true}
               ]')
           else
             EMBED_TITLE="手動トリガーが実行されました"
@@ -65,12 +63,10 @@ jobs:
               --arg ref "$GITHUB_REF" \
               --arg actor "$GITHUB_ACTOR" \
               --arg commit "$COMMIT_SHORT" \
-              --arg note "ビルドは実行しません" \
               '[
                 {name: "Ref", value: $ref, inline: false},
                 {name: "Actor", value: $actor, inline: true},
-                {name: "Commit", value: $commit, inline: true},
-                {name: "Note", value: $note, inline: true}
+                {name: "Commit", value: $commit, inline: true}
               ]')
           fi
 
