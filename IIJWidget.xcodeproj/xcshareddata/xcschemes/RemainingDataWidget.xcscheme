@@ -31,8 +31,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A56787032EC1360000C50874"
-               BuildableName = "IIJWidget.app"
-               BlueprintName = "IIJWidget"
+               BuildableName = "MioWidget.app"
+               BlueprintName = "MioWIdget"
                ReferencedContainer = "container:IIJWidget.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -62,8 +62,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A56787032EC1360000C50874"
-            BuildableName = "IIJWidget.app"
-            BlueprintName = "IIJWidget"
+            BuildableName = "MioWidget.app"
+            BlueprintName = "MioWIdget"
             ReferencedContainer = "container:IIJWidget.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -98,8 +98,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A56787032EC1360000C50874"
-            BuildableName = "IIJWidget.app"
-            BlueprintName = "IIJWidget"
+            BuildableName = "MioWidget.app"
+            BlueprintName = "MioWIdget"
             ReferencedContainer = "container:IIJWidget.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

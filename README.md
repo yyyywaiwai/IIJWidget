@@ -27,7 +27,7 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 
 ## セットアップ手順
 1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git && cd IIJWidget`。
-2. Xcode で `IIJWidget.xcodeproj` を開き、`Signing & Capabilities` で App Group / Keychain Sharing を有効化。`Shared/AppGroup.swift` の `group.jp.yyyywaiwai.iijwidget` を自身の App Group ID に更新し、両ターゲットの entitlements と一致させます。
+2. Xcode で `IIJWidget.xcodeproj` を開き、`Signing & Capabilities` で App Group / Keychain Sharing を有効化。`Shared/AppGroup.swift` の `group.jp.yyyywaiwai.miowidgetgroup` を自身の App Group ID に更新し、両ターゲットの entitlements と一致させます。
 3. アプリをビルドして起動するとオンボーディングが表示されるので、注意事項に同意後、資格情報を入力して保存します。保存後は設定タブまたは画面右上の「最新取得」で `WidgetRefreshService` による残量/請求/回線状態/利用量の一括取得を実行できます。
 4. ウィジェットを追加する場合は、端末の Home/Lock 画面で「IIJWidget」を選び、アクセサリ／Small／Medium の好きなサイズを追加してください。ウィジェットは 30 分おきに `WidgetDataStore` から更新し、`RefreshWidgetIntent` ボタンで手動リフレッシュが可能です。
 5. CLI で API を確認する場合:

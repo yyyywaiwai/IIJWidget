@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppGroup {
-    static let identifier = "group.jp.yyyywaiwai.iijwidget" // TODO: update to your actual App Group ID
+    static let identifier = "group.jp.yyyywaiwai.miowidgetgroup" // TODO: update to your actual App Group ID
 
     static var userDefaults: UserDefaults? {
         UserDefaults(suiteName: identifier)
@@ -11,6 +11,6 @@ enum AppGroup {
         guard let prefix = Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String else {
             return nil
         }
-        return "\(prefix)jp.yyyywaiwai.IIJWidget"
+        return "\(prefix)jp.yyyywaiwai.MioWidget"
     }
 }

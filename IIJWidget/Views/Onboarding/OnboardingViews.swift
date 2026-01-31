@@ -163,7 +163,7 @@ struct OnboardingDisclaimerStep: View {
                 VStack(spacing: 0) {
                     OnboardingHeader(
                         title: "ご利用前のご確認",
-                        subtitle: "IIJWidgetを安全にご利用いただくために、以下の内容をご確認ください。",
+                        subtitle: "MioWidgetを安全にご利用いただくために、以下の内容をご確認ください。",
                         systemImage: "checklist.checked"
                     )
 

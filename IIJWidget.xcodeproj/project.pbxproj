@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		A56788122EC1500000C50874 /* RemainingDataWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A567880C2EC1500000C50874 /* RemainingDataWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A5F306582F2C8B4800D89DAB /* MioWidget.icon in Resources */ = {isa = PBXBuildFile; fileRef = A5F306572F2C8B4800D89DAB /* MioWidget.icon */; };
+		A5F306592F2C8B4800D89DAB /* MioWidget.icon in Resources */ = {isa = PBXBuildFile; fileRef = A5F306572F2C8B4800D89DAB /* MioWidget.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,8 +37,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A56787042EC1360000C50874 /* IIJWidget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IIJWidget.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A56787042EC1360000C50874 /* MioWidget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MioWidget.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A567880C2EC1500000C50874 /* RemainingDataWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RemainingDataWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5F306572F2C8B4800D89DAB /* MioWidget.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = MioWidget.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -82,13 +85,14 @@
 				A567880A2EC1500000C50874 /* Shared */,
 				A567880B2EC1500000C50874 /* RemainingDataWidget */,
 				A56787052EC1360000C50874 /* Products */,
+				A5F306572F2C8B4800D89DAB /* MioWidget.icon */,
 			);
 			sourceTree = "<group>";
 		};
 		A56787052EC1360000C50874 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A56787042EC1360000C50874 /* IIJWidget.app */,
+				A56787042EC1360000C50874 /* MioWidget.app */,
 				A567880C2EC1500000C50874 /* RemainingDataWidget.appex */,
 			);
 			name = Products;
@@ -97,9 +101,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A56787032EC1360000C50874 /* IIJWidget */ = {
+		A56787032EC1360000C50874 /* MioWIdget */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A567870F2EC1360300C50874 /* Build configuration list for PBXNativeTarget "IIJWidget" */;
+			buildConfigurationList = A567870F2EC1360300C50874 /* Build configuration list for PBXNativeTarget "MioWIdget" */;
 			buildPhases = (
 				A56787002EC1360000C50874 /* Sources */,
 				A56787012EC1360000C50874 /* Frameworks */,
@@ -115,9 +119,9 @@
 				A56787062EC1360000C50874 /* IIJWidget */,
 				A567880A2EC1500000C50874 /* Shared */,
 			);
-			name = IIJWidget;
-			productName = IIJWidget;
-			productReference = A56787042EC1360000C50874 /* IIJWidget.app */;
+			name = MioWIdget;
+			productName = MioWidget;
+			productReference = A56787042EC1360000C50874 /* MioWidget.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A567880D2EC1500000C50874 /* RemainingDataWidget */ = {
@@ -176,7 +180,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A56787032EC1360000C50874 /* IIJWidget */,
+				A56787032EC1360000C50874 /* MioWIdget */,
 				A567880D2EC1500000C50874 /* RemainingDataWidget */,
 			);
 		};
@@ -187,6 +191,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5F306582F2C8B4800D89DAB /* MioWidget.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +199,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5F306592F2C8B4800D89DAB /* MioWidget.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -349,14 +355,15 @@
 		A56787102EC1360300C50874 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = MioWidget;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = IIJWidget/IIJWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PL326P8SR9;
+				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MioWidget;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -368,8 +375,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.IIJWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.MioWidget;
+				PRODUCT_NAME = MioWidget;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -383,14 +390,15 @@
 		A56787112EC1360300C50874 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = MioWidget;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = IIJWidget/IIJWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PL326P8SR9;
+				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MioWidget;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -402,8 +410,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.IIJWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.MioWidget;
+				PRODUCT_NAME = MioWidget;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -421,7 +429,7 @@
 				CODE_SIGN_ENTITLEMENTS = RemainingDataWidget/RemainingDataWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PL326P8SR9;
+				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RemainingDataWidget/WidgetExtensionInfo.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -431,7 +439,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.IIJWidget.RemainingDataWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.MioWidget.RemainingDataWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -447,7 +455,7 @@
 				CODE_SIGN_ENTITLEMENTS = RemainingDataWidget/RemainingDataWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PL326P8SR9;
+				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RemainingDataWidget/WidgetExtensionInfo.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -457,7 +465,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.IIJWidget.RemainingDataWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.yyyywaiwai.MioWidget.RemainingDataWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -479,7 +487,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A567870F2EC1360300C50874 /* Build configuration list for PBXNativeTarget "IIJWidget" */ = {
+		A567870F2EC1360300C50874 /* Build configuration list for PBXNativeTarget "MioWIdget" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A56787102EC1360300C50874 /* Debug */,
