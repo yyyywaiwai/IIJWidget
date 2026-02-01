@@ -1,14 +1,47 @@
 {
-  "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.77271,0.94454,0.80630,1.00000",
+          "display-p3:0.57666,0.92712,0.62116,1.00000"
+        ],
+        "orientation" : {
+          "start" : {
+            "x" : 0.5,
+            "y" : 1
+          },
+          "stop" : {
+            "x" : 0.5,
+            "y" : 0.3
+          }
+        }
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : "automatic"
+    }
+  ],
   "groups" : [
     {
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "image-name" : "mio_icon_transparent_full.png",
-          "name" : "mio_icon_transparent_full"
+          "blend-mode-specializations" : [
+            {
+              "value" : "normal"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "darken"
+            }
+          ],
+          "fill" : "automatic",
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "image.png",
+          "name" : "image",
+          "opacity" : 1
         }
       ],
       "shadow" : {
