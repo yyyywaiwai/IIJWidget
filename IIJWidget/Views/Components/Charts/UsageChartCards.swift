@@ -1,4 +1,5 @@
 import Charts
+import Foundation
 import SwiftUI
 
 struct MonthlyUsageChartCard: View {
@@ -9,12 +10,18 @@ struct MonthlyUsageChartCard: View {
   @State private var cardWidth: CGFloat = 0
   @State private var selectedIndex: Int?
   @State private var animateBars = false
+  @State private var cachedPoints: [UsageChartPoint] = []
+  @State private var cachedDisplayCount: Int = 0
+  @State private var animationToken: String = ""
 
-  private var displayCount: Int {
+  private var currentDisplayCount: Int {
     cardWidth > 450 ? 12 : 7
   }
+  private var displayCount: Int {
+    cachedDisplayCount > 0 ? cachedDisplayCount : currentDisplayCount
+  }
   private var points: [UsageChartPoint] {
-    Array(monthlyChartPoints(from: services).suffix(displayCount))
+    cachedPoints
   }
   private var indexedPoints: [(index: Int, point: UsageChartPoint)] {
     points.enumerated().map { (index: $0.offset, point: $0.element) }
@@ -40,14 +47,15 @@ struct MonthlyUsageChartCard: View {
         chartContent
           .frame(height: 220)
           .onAppear {
-            selectedIndex = defaultSelectionIndex
-            triggerBarAnimation()
+            rebuildPoints()
           }
           .onChange(of: services) { _ in
-            selectedIndex = defaultSelectionIndex
-            triggerBarAnimation()
+            rebuildPoints()
           }
           .onChange(of: animationTrigger) { _ in
+            triggerBarAnimation()
+          }
+          .onChange(of: animationToken) { _ in
             triggerBarAnimation()
           }
           .onDisappear {
@@ -97,6 +105,11 @@ struct MonthlyUsageChartCard: View {
         {
           AxisGridLine(centered: true)
           AxisTick(centered: true)
+          AxisValueLabel {
+            Text(labelForIndex(index))
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
         }
       }
     }
@@ -107,9 +120,6 @@ struct MonthlyUsageChartCard: View {
       GeometryReader { geometry in
         ZStack(alignment: .topLeading) {
           selectionCalloutLayer(proxy: proxy, geometry: geometry)
-            .allowsHitTesting(false)
-
-          axisLabelsLayer(proxy: proxy, geometry: geometry)
             .allowsHitTesting(false)
 
           Rectangle()
@@ -141,6 +151,9 @@ struct MonthlyUsageChartCard: View {
           }
           .onChange(of: proxy.size) { newSize in
             cardWidth = newSize.width
+            if currentDisplayCount != cachedDisplayCount {
+              rebuildPoints()
+            }
           }
       }
     }
@@ -181,21 +194,25 @@ struct MonthlyUsageChartCard: View {
 
   private var axisLabelPadding: CGFloat { 18 }
 
-  @ViewBuilder
-  private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
-    let plotFrame = proxy.plotAreaFrame
-    let rect = geometry[plotFrame]
-    ZStack(alignment: .topLeading) {
-      ForEach(indexedPoints, id: \.point.id) { entry in
-        if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
-          Text(entry.point.displayLabel)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .position(
-              x: rect.minX + xPosition,
-              y: rect.maxY + axisLabelPadding
-            )
+  private func labelForIndex(_ index: Int) -> String {
+    guard indexedPoints.indices.contains(index) else { return "" }
+    return indexedPoints[index].point.displayLabel
+  }
+
+  private func rebuildPoints() {
+    let targetCount = currentDisplayCount
+    let servicesSnapshot = services
+    DispatchQueue.global(qos: .userInitiated).async {
+      let nextPoints = Array(monthlyChartPoints(from: servicesSnapshot).suffix(targetCount))
+      let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
+      DispatchQueue.main.async {
+        if cachedDisplayCount == targetCount && animationToken == token {
+          return
         }
+        cachedPoints = nextPoints
+        cachedDisplayCount = targetCount
+        selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
+        animationToken = token
       }
     }
   }
@@ -297,17 +314,20 @@ struct DailyUsageChartCard: View {
   @State private var cardWidth: CGFloat = 0
   @State private var selectedIndex: Int?
   @State private var animateBars = false
+  @State private var cachedPoints: [UsageChartPoint] = []
+  @State private var cachedDisplayCount: Int = 0
+  @State private var animationToken: String = ""
 
-  private var displayCount: Int {
+  private var currentDisplayCount: Int {
     cardWidth > 450 ? 14 : 7
   }
 
-  private var points: [UsageChartPoint] {
-    dailyChartPoints(from: services)
+  private var displayCount: Int {
+    cachedDisplayCount > 0 ? cachedDisplayCount : currentDisplayCount
   }
 
   private var visiblePoints: [UsageChartPoint] {
-    Array(points.suffix(displayCount))
+    cachedPoints
   }
 
   private var indexedPoints: [(index: Int, point: UsageChartPoint)] {
@@ -338,14 +358,15 @@ struct DailyUsageChartCard: View {
         chartContent
           .frame(height: 220)
           .onAppear {
-            selectedIndex = defaultSelectionIndex
-            triggerBarAnimation()
+            rebuildPoints()
           }
           .onChange(of: services) { _ in
-            selectedIndex = defaultSelectionIndex
-            triggerBarAnimation()
+            rebuildPoints()
           }
           .onChange(of: animationTrigger) { _ in
+            triggerBarAnimation()
+          }
+          .onChange(of: animationToken) { _ in
             triggerBarAnimation()
           }
           .onDisappear {
@@ -395,6 +416,11 @@ struct DailyUsageChartCard: View {
         {
           AxisGridLine(centered: true)
           AxisTick(centered: true)
+          AxisValueLabel {
+            Text(labelForIndex(index))
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
         }
       }
     }
@@ -405,9 +431,6 @@ struct DailyUsageChartCard: View {
       GeometryReader { geometry in
         ZStack(alignment: .topLeading) {
           selectionCalloutLayer(proxy: proxy, geometry: geometry)
-            .allowsHitTesting(false)
-
-          axisLabelsLayer(proxy: proxy, geometry: geometry)
             .allowsHitTesting(false)
 
           Rectangle()
@@ -439,6 +462,9 @@ struct DailyUsageChartCard: View {
           }
           .onChange(of: proxy.size) { newSize in
             cardWidth = newSize.width
+            if currentDisplayCount != cachedDisplayCount {
+              rebuildPoints()
+            }
           }
       }
     }
@@ -479,21 +505,25 @@ struct DailyUsageChartCard: View {
 
   private var axisLabelPadding: CGFloat { 18 }
 
-  @ViewBuilder
-  private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
-    let plotFrame = proxy.plotAreaFrame
-    let rect = geometry[plotFrame]
-    ZStack(alignment: .topLeading) {
-      ForEach(indexedPoints, id: \.point.id) { entry in
-        if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
-          Text(entry.point.displayLabel)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .position(
-              x: rect.minX + xPosition,
-              y: rect.maxY + axisLabelPadding
-            )
+  private func labelForIndex(_ index: Int) -> String {
+    guard indexedPoints.indices.contains(index) else { return "" }
+    return indexedPoints[index].point.displayLabel
+  }
+
+  private func rebuildPoints() {
+    let targetCount = currentDisplayCount
+    let servicesSnapshot = services
+    DispatchQueue.global(qos: .userInitiated).async {
+      let nextPoints = Array(dailyChartPoints(from: servicesSnapshot).suffix(targetCount))
+      let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
+      DispatchQueue.main.async {
+        if cachedDisplayCount == targetCount && animationToken == token {
+          return
         }
+        cachedPoints = nextPoints
+        cachedDisplayCount = targetCount
+        selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
+        animationToken = token
       }
     }
   }

@@ -207,6 +207,11 @@ struct BillingBarChart: View {
             {
               AxisGridLine(centered: true)
               AxisTick(centered: true)
+              AxisValueLabel {
+                Text(billingAxisLabel(for: indexedPoints[index].point))
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
             }
           }
         }
@@ -215,12 +220,6 @@ struct BillingBarChart: View {
         }
         .chartYScale(domain: 0...yMaxValue)
         .chartXScale(domain: discreteDomain(forCount: indexedPoints.count))
-        .chartOverlay { proxy in
-          GeometryReader { geometry in
-            axisLabelsLayer(proxy: proxy, geometry: geometry)
-              .allowsHitTesting(false)
-          }
-        }
         .padding(.bottom, axisLabelPadding)
         .background {
           GeometryReader { proxy in
@@ -271,25 +270,6 @@ struct BillingBarChart: View {
   }
 
   private var axisLabelPadding: CGFloat { 18 }
-
-  @ViewBuilder
-  private func axisLabelsLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
-    let plotFrame = proxy.plotAreaFrame
-    let rect = geometry[plotFrame]
-    ZStack(alignment: .topLeading) {
-      ForEach(indexedPoints, id: \.point.id) { entry in
-        if let xPosition = proxy.position(forX: centeredValue(for: entry.index)) {
-          Text(billingAxisLabel(for: entry.point))
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .position(
-              x: rect.minX + xPosition,
-              y: rect.maxY + axisLabelPadding
-            )
-        }
-      }
-    }
-  }
 
   private func index(from value: Double) -> Int? {
     guard !indexedPoints.isEmpty else { return nil }

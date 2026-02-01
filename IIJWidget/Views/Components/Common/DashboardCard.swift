@@ -31,14 +31,14 @@ struct DashboardCard<Content: View>: View {
         .background {
             let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
             shape
-                .fill(.ultraThinMaterial)
+                .fill(.thinMaterial)
                 .overlay {
                     shape
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(colorScheme == .dark ? 0.15 : 0.6),
-                                    Color.white.opacity(colorScheme == .dark ? 0.05 : 0.2)
+                                    Color.white.opacity(colorScheme == .dark ? 0.12 : 0.5),
+                                    Color.white.opacity(colorScheme == .dark ? 0.04 : 0.15)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -46,8 +46,12 @@ struct DashboardCard<Content: View>: View {
                             lineWidth: 1
                         )
                 }
-                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.08), radius: 20, x: 0, y: 8)
-                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.2 : 0.04), radius: 4, x: 0, y: 2)
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.05),
+                    radius: 12,
+                    x: 0,
+                    y: 6
+                )
         }
     }
 }

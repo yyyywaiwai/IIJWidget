@@ -355,7 +355,7 @@ struct ServiceInfoCard: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background {
       RoundedRectangle(cornerRadius: 24, style: .continuous)
-        .fill(.ultraThinMaterial)
+        .fill(.thinMaterial)
         .overlay {
           RoundedRectangle(cornerRadius: 24, style: .continuous)
             .stroke(
@@ -371,10 +371,11 @@ struct ServiceInfoCard: View {
             )
         }
         .shadow(
-          color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.06), radius: 16, x: 0, y: 6
+          color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.05),
+          radius: 12,
+          x: 0,
+          y: 6
         )
-        .shadow(
-          color: Color.black.opacity(colorScheme == .dark ? 0.15 : 0.03), radius: 3, x: 0, y: 1)
     }
   }
 }
