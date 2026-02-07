@@ -17,6 +17,22 @@ struct EmptyStateView: View {
     }
 }
 
+struct LoadingStateView: View {
+    let text: String
+    var minHeight: CGFloat = 220
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(text)
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: minHeight)
+    }
+}
+
 struct PlaceholderRow: View {
     let text: String
 

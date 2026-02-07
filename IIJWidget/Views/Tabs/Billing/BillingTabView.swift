@@ -4,6 +4,7 @@ import SwiftUI
 struct BillingTabView: View {
   @ObservedObject var viewModel: AppViewModel
   let bill: BillSummaryResponse?
+  let isRefreshing: Bool
   let accentColors: AccentColorSettings
   let showsBillingChart: Bool
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -18,7 +19,10 @@ struct BillingTabView: View {
 
       ScrollView {
         VStack(spacing: 20) {
-          if let bill {
+          if isRefreshing && (bill == nil || bill?.billList.isEmpty == true) {
+            LoadingStateView(text: "請求データを取得中…")
+              .padding(.vertical, 40)
+          } else if let bill {
             if useTwoColumn {
               HStack(alignment: .top, spacing: 20) {
                 VStack(spacing: 20) {

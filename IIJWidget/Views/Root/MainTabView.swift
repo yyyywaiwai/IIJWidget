@@ -5,6 +5,7 @@ struct MainTabView: View {
     @Binding var selectedSection: AppSection
     @Binding var hasCompletedOnboarding: Bool
     let payload: AggregatePayload?
+    let isRefreshing: Bool
     let presentOnboarding: () -> Void
 
     var body: some View {
@@ -12,6 +13,7 @@ struct MainTabView: View {
             Group {
                 HomeDashboardTab(
                     payload: payload,
+                    isRefreshing: isRefreshing,
                     accentColors: viewModel.accentColors,
                     usageAlertSettings: viewModel.usageAlertSettings,
                     defaultUsageChart: viewModel.displayPreferences.defaultUsageChart,
@@ -25,6 +27,7 @@ struct MainTabView: View {
                     monthly: payload?.monthlyUsage ?? [],
                     daily: payload?.dailyUsage ?? [],
                     serviceStatus: payload?.serviceStatus,
+                    isRefreshing: isRefreshing,
                     accentColors: viewModel.accentColors,
                     usageAlertSettings: viewModel.usageAlertSettings,
                     showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage,
@@ -36,6 +39,7 @@ struct MainTabView: View {
                 BillingTabView(
                     viewModel: viewModel,
                     bill: payload?.bill,
+                    isRefreshing: isRefreshing,
                     accentColors: viewModel.accentColors,
                     showsBillingChart: viewModel.displayPreferences.showsBillingChart
                 )

@@ -7,7 +7,7 @@ import WidgetKit
 final class AppViewModel: ObservableObject {
     enum LoadState {
         case idle
-        case loading(previous: AggregatePayload?)
+        case loading(previous: AggregatePayload?, current: AggregatePayload?)
         case loaded(AggregatePayload)
         case failed(String, lastPayload: AggregatePayload?)
     }
@@ -181,20 +181,25 @@ final class AppViewModel: ObservableObject {
         }
         refreshTaskInFlight = true
         let previousPayload = currentPayload()
-        state = .loading(previous: previousPayload)
+        state = .loading(previous: previousPayload, current: nil)
         defer { refreshTaskInFlight = false }
 
         let manualCredentials = currentManualCredentials()
         let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
 
         do {
-            let outcome = try await widgetRefreshService.refresh(
+            let outcome = try await widgetRefreshService.refreshProgressivelyForApp(
                 manualCredentials: manualCredentials,
                 persistManualCredentials: true,
                 allowSessionReuse: !forceManualLogin,
                 allowKeychainFallback: !forceManualLogin,
                 calculateTodayFromRemaining: displayPreferences.calculateTodayFromRemaining,
-                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable
+                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable,
+                onUpdate: { payload in
+                    await MainActor.run {
+                        self.state = .loading(previous: previousPayload, current: payload)
+                    }
+                }
             )
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             state = .loaded(outcome.payload)
@@ -226,8 +231,8 @@ final class AppViewModel: ObservableObject {
         switch state {
         case .loaded(let payload):
             return payload
-        case .loading(let previous):
-            return previous
+        case .loading(let previous, let current):
+            return current ?? previous
         case .failed(_, let last):
             return last
         case .idle:

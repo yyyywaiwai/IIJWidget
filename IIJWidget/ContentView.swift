@@ -16,10 +16,14 @@ struct ContentView: View {
                 selectedSection: $selectedSection,
                 hasCompletedOnboarding: $hasCompletedOnboarding,
                 payload: loadedPayload,
+                isRefreshing: isLoading,
                 presentOnboarding: { isOnboardingPresented = true }
             )
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    if isLoading {
+                        ProgressView()
+                    }
                     Button {
                         viewModel.refreshManually()
                     } label: {
@@ -36,11 +40,6 @@ struct ContentView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
                     .padding(.bottom, 64)
-                }
-            }
-            .overlay {
-                if isLoading {
-                    LoadingOverlay()
                 }
             }
             .navigationTitle(selectedSection.title)
@@ -77,8 +76,8 @@ struct ContentView: View {
         switch viewModel.state {
         case .loaded(let payload):
             return payload
-        case .loading(let previous):
-            return previous
+        case .loading(_, let current):
+            return current
         case .failed(_, let last):
             return last
         case .idle:

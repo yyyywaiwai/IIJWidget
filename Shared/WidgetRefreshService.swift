@@ -132,6 +132,82 @@ struct WidgetRefreshService {
         throw WidgetRefreshError.missingCredentials
     }
 
+    func refreshProgressivelyForApp(
+        manualCredentials: Credentials? = nil,
+        persistManualCredentials: Bool = true,
+        allowSessionReuse: Bool = true,
+        allowKeychainFallback: Bool = true,
+        calculateTodayFromRemaining: Bool = false,
+        dailyFetchMode: DailyFetchMode? = nil,
+        onUpdate: ((AggregatePayload) async -> Void)? = nil
+    ) async throws -> RefreshOutcome {
+        debugStore.beginCaptureSession()
+        defer { debugStore.finalizeCaptureSession() }
+
+        if let mock = mockOutcome(
+            manualCredentials: manualCredentials,
+            persistManualCredentials: persistManualCredentials,
+            allowKeychainFallback: allowKeychainFallback
+        ) {
+            return mock
+        }
+
+        if !allowSessionReuse {
+            apiClient.clearPersistedSession()
+        }
+
+        let resolvedDailyMode: DailyFetchMode = dailyFetchMode
+            ?? (calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable)
+
+        func finalizeAdjusted(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
+            let adjusted = calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
+            return finalize(payload: adjusted, source: source)
+        }
+
+        if allowSessionReuse {
+            do {
+                let payload = try await apiClient.fetchUsingExistingSessionProgressively(
+                    dailyFetchMode: resolvedDailyMode,
+                    onUpdate: onUpdate
+                )
+                return finalizeAdjusted(payload: payload, source: .sessionCookie)
+            } catch IIJAPIClientError.invalidSession {
+                // セッションが切れているので次の段階へフォールバック
+            }
+        }
+
+        if allowKeychainFallback, let stored = try credentialStore.load() {
+            do {
+                let payload = try await apiClient.fetchAllProgressively(
+                    credentials: stored,
+                    dailyFetchMode: resolvedDailyMode,
+                    onUpdate: onUpdate
+                )
+                return finalizeAdjusted(payload: payload, source: .keychain)
+            } catch {
+                if apiClient.isAuthenticationError(error) {
+                    try? credentialStore.delete()
+                } else {
+                    throw error
+                }
+            }
+        }
+
+        if let manual = manualCredentials, !manual.mioId.isEmpty, !manual.password.isEmpty {
+            let payload = try await apiClient.fetchAllProgressively(
+                credentials: manual,
+                dailyFetchMode: resolvedDailyMode,
+                onUpdate: onUpdate
+            )
+            if persistManualCredentials {
+                try? credentialStore.save(manual)
+            }
+            return finalizeAdjusted(payload: payload, source: .manual)
+        }
+
+        throw WidgetRefreshError.missingCredentials
+    }
+
     private func finalize(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
         payloadStore.save(payload: payload)
         let previousSnapshot = widgetDataStore.loadSnapshot()

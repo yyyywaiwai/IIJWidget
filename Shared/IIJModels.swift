@@ -56,6 +56,10 @@ struct BillSummaryResponse: Codable {
     let isImt: Bool?
 }
 
+extension BillSummaryResponse {
+    static let empty = BillSummaryResponse(billList: [], isVoiceSim: nil, isImt: nil)
+}
+
 struct BillDetailResponse: Codable {
     struct TaxBreakdown: Codable, Identifiable {
         let label: String
@@ -114,6 +118,10 @@ struct ServiceStatusResponse: Codable {
 
     let serviceInfoList: [ServiceStatus]
     let jmbNumberChangePossible: Bool?
+}
+
+extension ServiceStatusResponse {
+    static let empty = ServiceStatusResponse(serviceInfoList: [], jmbNumberChangePossible: nil)
 }
 
 struct AggregatePayload: Codable {

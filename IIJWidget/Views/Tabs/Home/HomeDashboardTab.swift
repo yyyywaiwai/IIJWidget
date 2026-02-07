@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeDashboardTab: View {
   let payload: AggregatePayload?
+  let isRefreshing: Bool
   let accentColors: AccentColorSettings
   let usageAlertSettings: UsageAlertSettings
   let defaultUsageChart: UsageChartDefault
@@ -34,6 +35,7 @@ struct HomeDashboardTab: View {
               UsageChartSwitcher(
                 monthlyServices: payload.monthlyUsage,
                 dailyServices: payload.dailyUsage,
+                isRefreshing: isRefreshing,
                 accentColors: accentColors,
                 usageAlertSettings: usageAlertSettings,
                 defaultChart: defaultUsageChart,
@@ -43,6 +45,9 @@ struct HomeDashboardTab: View {
           }
           .padding()
         }
+      } else if isRefreshing {
+        LoadingStateView(text: "回線情報を取得中…")
+          .padding()
       } else {
         EmptyStateView(text: "最新の残量を取得するとダッシュボードが表示されます。設定タブで資格情報を入力し、右上の「最新取得」をタップしてください。")
           .padding()
@@ -71,6 +76,7 @@ struct UsageChartSwitcher: View {
 
   let monthlyServices: [MonthlyUsageService]
   let dailyServices: [DailyUsageService]
+  let isRefreshing: Bool
   let accentColors: AccentColorSettings
   let usageAlertSettings: UsageAlertSettings
   let defaultChart: UsageChartDefault
@@ -82,6 +88,7 @@ struct UsageChartSwitcher: View {
   init(
     monthlyServices: [MonthlyUsageService],
     dailyServices: [DailyUsageService],
+    isRefreshing: Bool,
     accentColors: AccentColorSettings,
     usageAlertSettings: UsageAlertSettings,
     defaultChart: UsageChartDefault,
@@ -89,6 +96,7 @@ struct UsageChartSwitcher: View {
   ) {
     self.monthlyServices = monthlyServices
     self.dailyServices = dailyServices
+    self.isRefreshing = isRefreshing
     self.accentColors = accentColors
     self.usageAlertSettings = usageAlertSettings
     self.defaultChart = defaultChart
@@ -111,10 +119,12 @@ struct UsageChartSwitcher: View {
               HStack(alignment: .top, spacing: 16) {
                 MonthlyUsageChartCard(
                   services: monthlyServices, accentColor: accentColors,
-                  usageAlertSettings: usageAlertSettings)
+                  usageAlertSettings: usageAlertSettings,
+                  isRefreshing: isRefreshing)
                 DailyUsageChartCard(
                   services: dailyServices, accentColor: accentColors,
-                  usageAlertSettings: usageAlertSettings)
+                  usageAlertSettings: usageAlertSettings,
+                  isRefreshing: isRefreshing)
               }
               .frame(maxWidth: .infinity)
             } else {
@@ -122,10 +132,12 @@ struct UsageChartSwitcher: View {
               VStack(spacing: 16) {
                 MonthlyUsageChartCard(
                   services: monthlyServices, accentColor: accentColors,
-                  usageAlertSettings: usageAlertSettings)
+                  usageAlertSettings: usageAlertSettings,
+                  isRefreshing: isRefreshing)
                 DailyUsageChartCard(
                   services: dailyServices, accentColor: accentColors,
-                  usageAlertSettings: usageAlertSettings)
+                  usageAlertSettings: usageAlertSettings,
+                  isRefreshing: isRefreshing)
               }
               .frame(maxWidth: .infinity)
             }
@@ -193,6 +205,7 @@ struct UsageChartSwitcher: View {
                 services: monthlyServices,
                 accentColor: accentColors,
                 usageAlertSettings: usageAlertSettings,
+                isRefreshing: isRefreshing,
                 animationTrigger: selection
               )
               .transition(
@@ -205,6 +218,7 @@ struct UsageChartSwitcher: View {
                 services: dailyServices,
                 accentColor: accentColors,
                 usageAlertSettings: usageAlertSettings,
+                isRefreshing: isRefreshing,
                 animationTrigger: selection
               )
               .transition(

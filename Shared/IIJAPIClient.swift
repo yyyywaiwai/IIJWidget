@@ -67,6 +67,23 @@ final class IIJAPIClient {
         }
     }
 
+    func fetchAllProgressively(
+        credentials: Credentials,
+        dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable,
+        onUpdate: ((AggregatePayload) async -> Void)? = nil
+    ) async throws -> AggregatePayload {
+        guard !credentials.mioId.isEmpty, !credentials.password.isEmpty else {
+            throw IIJAPIClientError.invalidCredentials
+        }
+
+        return try await performWithAutoLogin(credentials: credentials) {
+            try await buildAggregatePayloadProgressively(
+                dailyFetchMode: dailyFetchMode,
+                onUpdate: onUpdate
+            )
+        }
+    }
+
     func fetchTopOnly(credentials: Credentials) async throws -> MemberTopResponse {
         guard !credentials.mioId.isEmpty, !credentials.password.isEmpty else {
             throw IIJAPIClientError.invalidCredentials
@@ -80,6 +97,26 @@ final class IIJAPIClient {
     func fetchUsingExistingSession(dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable) async throws -> AggregatePayload {
         do {
             let payload = try await buildAggregatePayload(dailyFetchMode: dailyFetchMode)
+            hasValidSession = true
+            return payload
+        } catch {
+            invalidateSession()
+            if isAuthenticationError(error) {
+                throw IIJAPIClientError.invalidSession
+            }
+            throw error
+        }
+    }
+
+    func fetchUsingExistingSessionProgressively(
+        dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable,
+        onUpdate: ((AggregatePayload) async -> Void)? = nil
+    ) async throws -> AggregatePayload {
+        do {
+            let payload = try await buildAggregatePayloadProgressively(
+                dailyFetchMode: dailyFetchMode,
+                onUpdate: onUpdate
+            )
             hasValidSession = true
             return payload
         } catch {
@@ -496,6 +533,78 @@ final class IIJAPIClient {
         activeCredentials = nil
         cookieStorage.cookies?.forEach { cookie in
             cookieStorage.deleteCookie(cookie)
+        }
+    }
+
+    private enum AggregatePayloadPart {
+        case top(MemberTopResponse)
+        case bill(BillSummaryResponse)
+        case serviceStatus(ServiceStatusResponse)
+        case monthlyUsage([MonthlyUsageService])
+        case dailyUsage([DailyUsageService])
+    }
+
+    private func buildAggregatePayloadProgressively(
+        dailyFetchMode: DailyFetchMode = .mergedPreviewAndTable,
+        onUpdate: ((AggregatePayload) async -> Void)? = nil
+    ) async throws -> AggregatePayload {
+        let fetchedAt = Date()
+
+        return try await withThrowingTaskGroup(of: AggregatePayloadPart.self) { group in
+            group.addTask { .top(try await self.fetchTop()) }
+            group.addTask { .bill(try await self.fetchBillSummary()) }
+            group.addTask { .serviceStatus(try await self.fetchServiceStatus()) }
+            group.addTask { .monthlyUsage(try await self.fetchMonthlyUsage()) }
+            group.addTask { .dailyUsage(try await self.fetchDailyUsage(dailyFetchMode: dailyFetchMode)) }
+
+            var top: MemberTopResponse?
+            var bill = BillSummaryResponse.empty
+            var status = ServiceStatusResponse.empty
+            var monthly: [MonthlyUsageService] = []
+            var daily: [DailyUsageService] = []
+
+            func emitUpdateIfPossible() async {
+                guard let onUpdate, let top else { return }
+                await onUpdate(AggregatePayload(
+                    fetchedAt: fetchedAt,
+                    top: top,
+                    bill: bill,
+                    serviceStatus: status,
+                    monthlyUsage: monthly,
+                    dailyUsage: daily
+                ))
+            }
+
+            while let part = try await group.next() {
+                switch part {
+                case .top(let value):
+                    top = value
+                case .bill(let value):
+                    bill = value
+                case .serviceStatus(let value):
+                    status = value
+                case .monthlyUsage(let value):
+                    monthly = value
+                case .dailyUsage(let value):
+                    daily = value
+                }
+
+                // Emit as soon as top is available, then on each completed part.
+                await emitUpdateIfPossible()
+            }
+
+            guard let resolvedTop = top else {
+                throw IIJAPIClientError.invalidResponse
+            }
+
+            return AggregatePayload(
+                fetchedAt: fetchedAt,
+                top: resolvedTop,
+                bill: bill,
+                serviceStatus: status,
+                monthlyUsage: monthly,
+                dailyUsage: daily
+            )
         }
     }
 

@@ -4,6 +4,7 @@ struct UsageListTab: View {
   let monthly: [MonthlyUsageService]
   let daily: [DailyUsageService]
   let serviceStatus: ServiceStatusResponse?
+  let isRefreshing: Bool
   let accentColors: AccentColorSettings
   let usageAlertSettings: UsageAlertSettings
   let showsLowSpeedUsage: Bool
@@ -116,9 +117,13 @@ struct UsageListTab: View {
   private var monthlyContent: some View {
     VStack(alignment: .leading, spacing: 16) {
       if monthly.isEmpty {
-        EmptyUsageRow(text: "まだ月別データがありません", icon: "calendar.badge.clock")
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 40)
+        if isRefreshing {
+          LoadingStateView(text: "月別利用量を取得中…", minHeight: 160)
+        } else {
+          EmptyUsageRow(text: "まだ月別データがありません", icon: "calendar.badge.clock")
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        }
       } else {
         MonthlyUsageSection(
           services: monthly,
@@ -134,9 +139,13 @@ struct UsageListTab: View {
   private var dailyContent: some View {
     VStack(alignment: .leading, spacing: 16) {
       if daily.isEmpty {
-        EmptyUsageRow(text: "まだ日別データがありません", icon: "clock.badge.questionmark")
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 40)
+        if isRefreshing {
+          LoadingStateView(text: "日別利用量を取得中…", minHeight: 160)
+        } else {
+          EmptyUsageRow(text: "まだ日別データがありません", icon: "clock.badge.questionmark")
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        }
       } else {
         DailyUsageSection(
           services: daily,
@@ -151,7 +160,14 @@ struct UsageListTab: View {
 
   @ViewBuilder
   private var serviceStatusSection: some View {
-    if let serviceStatus {
+    if isRefreshing && (serviceStatus == nil || serviceStatus?.serviceInfoList.isEmpty == true) {
+      LoadingStateView(text: "回線ステータスを取得中…", minHeight: 140)
+        .padding()
+        .background {
+          RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(.ultraThinMaterial)
+        }
+    } else if let serviceStatus {
       VStack(alignment: .leading, spacing: 12) {
         DisclosureGroup(isExpanded: $isStatusExpanded) {
           ServiceStatusList(status: serviceStatus)

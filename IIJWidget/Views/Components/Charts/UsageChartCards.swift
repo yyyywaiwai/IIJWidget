@@ -6,6 +6,7 @@ struct MonthlyUsageChartCard: View {
   let services: [MonthlyUsageService]
   let accentColor: AccentColorSettings
   let usageAlertSettings: UsageAlertSettings
+  let isRefreshing: Bool
   var animationTrigger: AnyHashable? = nil
   @State private var cardWidth: CGFloat = 0
   @State private var selectedIndex: Int?
@@ -41,26 +42,32 @@ struct MonthlyUsageChartCard: View {
 
   var body: some View {
     DashboardCard(title: "月別データ利用量", subtitle: "直近\(displayCount)か月 (GB)") {
-      if indexedPoints.isEmpty {
-        ChartPlaceholder(text: "まだデータがありません")
-      } else {
-        chartContent
-          .frame(height: 220)
-          .onAppear {
-            rebuildPoints()
+      Group {
+        if indexedPoints.isEmpty {
+          if isRefreshing {
+            LoadingStateView(text: "月別データを取得中…", minHeight: 160)
+          } else {
+            ChartPlaceholder(text: "まだデータがありません")
           }
-          .onChange(of: services) { _ in
-            rebuildPoints()
-          }
-          .onChange(of: animationTrigger) { _ in
-            triggerBarAnimation()
-          }
-          .onChange(of: animationToken) { _ in
-            triggerBarAnimation()
-          }
-          .onDisappear {
-            animateBars = false
-          }
+        } else {
+          chartContent
+            .frame(height: 220)
+        }
+      }
+      .onAppear {
+        rebuildPoints()
+      }
+      .onChange(of: services) { _ in
+        rebuildPoints()
+      }
+      .onChange(of: animationTrigger) { _ in
+        triggerBarAnimation()
+      }
+      .onChange(of: animationToken) { _ in
+        triggerBarAnimation()
+      }
+      .onDisappear {
+        animateBars = false
       }
     }
   }
@@ -310,6 +317,7 @@ struct DailyUsageChartCard: View {
   let services: [DailyUsageService]
   let accentColor: AccentColorSettings
   let usageAlertSettings: UsageAlertSettings
+  let isRefreshing: Bool
   var animationTrigger: AnyHashable? = nil
   @State private var cardWidth: CGFloat = 0
   @State private var selectedIndex: Int?
@@ -352,26 +360,32 @@ struct DailyUsageChartCard: View {
 
   var body: some View {
     DashboardCard(title: "日別データ利用量", subtitle: "直近\(displayCount)日 (MB)") {
-      if indexedPoints.isEmpty {
-        ChartPlaceholder(text: "まだデータがありません")
-      } else {
-        chartContent
-          .frame(height: 220)
-          .onAppear {
-            rebuildPoints()
+      Group {
+        if indexedPoints.isEmpty {
+          if isRefreshing {
+            LoadingStateView(text: "日別データを取得中…", minHeight: 160)
+          } else {
+            ChartPlaceholder(text: "まだデータがありません")
           }
-          .onChange(of: services) { _ in
-            rebuildPoints()
-          }
-          .onChange(of: animationTrigger) { _ in
-            triggerBarAnimation()
-          }
-          .onChange(of: animationToken) { _ in
-            triggerBarAnimation()
-          }
-          .onDisappear {
-            animateBars = false
-          }
+        } else {
+          chartContent
+            .frame(height: 220)
+        }
+      }
+      .onAppear {
+        rebuildPoints()
+      }
+      .onChange(of: services) { _ in
+        rebuildPoints()
+      }
+      .onChange(of: animationTrigger) { _ in
+        triggerBarAnimation()
+      }
+      .onChange(of: animationToken) { _ in
+        triggerBarAnimation()
+      }
+      .onDisappear {
+        animateBars = false
       }
     }
   }
