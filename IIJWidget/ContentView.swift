@@ -23,13 +23,16 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     if isLoading {
                         ProgressView()
+                            .accessibilityLabel("取得中")
                     }
-                    Button {
-                        viewModel.refreshManually()
-                    } label: {
-                        Label("最新取得", systemImage: "arrow.clockwise")
+                    else {
+                        Button {
+                            viewModel.refreshManually()
+                        } label: {
+                            Label("最新取得", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(!viewModel.canSubmit)
                     }
-                    .disabled(!viewModel.canSubmit || isLoading)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
