@@ -56,6 +56,7 @@ struct MonthlyUsageChartCard: View {
       }
       .onAppear {
         rebuildPoints()
+        animateOnAppearIfNeeded()
       }
       .onChange(of: services) { _ in
         rebuildPoints()
@@ -257,6 +258,14 @@ struct MonthlyUsageChartCard: View {
     }
   }
 
+  private func animateOnAppearIfNeeded() {
+    // TabView keeps child views alive; when switching tabs, `onDisappear` runs and we reset
+    // `animateBars` to false. If the underlying data didn't change, `rebuildPoints()` is a no-op
+    // and no animation trigger fires, leaving the bars stuck at 0. Ensure we restore the bars.
+    guard !indexedPoints.isEmpty, !animateBars else { return }
+    triggerBarAnimation()
+  }
+
   @ViewBuilder
   private func selectionCalloutLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
     let plotFrame = proxy.plotAreaFrame
@@ -374,6 +383,7 @@ struct DailyUsageChartCard: View {
       }
       .onAppear {
         rebuildPoints()
+        animateOnAppearIfNeeded()
       }
       .onChange(of: services) { _ in
         rebuildPoints()
@@ -573,6 +583,12 @@ struct DailyUsageChartCard: View {
         animateBars = true
       }
     }
+  }
+
+  private func animateOnAppearIfNeeded() {
+    // See MonthlyUsageChartCard.animateOnAppearIfNeeded().
+    guard !indexedPoints.isEmpty, !animateBars else { return }
+    triggerBarAnimation()
   }
 
   @ViewBuilder
