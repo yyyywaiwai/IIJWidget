@@ -1,0 +1,30 @@
+{
+  "mioId": "MA0000000",
+  "statusCode": "200",
+  "contract": {
+    "hdcList": [
+      {
+        "serviceCode": "hdc00000001",
+        "lineServiceCode": "hdu00000001",
+        "groupServiceCode": "",
+        "planName": "ギガプラン 10GB",
+        "telNo": "070-0000-0001",
+        "serviceStatus": "利用中",
+        "chargePlan": "10",
+        "eSim": 0
+      }
+    ],
+    "hddList": [
+      {
+        "serviceCode": "hdd00000002",
+        "lineServiceCode": "hdu00000002",
+        "groupServiceCode": "hdd00000002",
+        "planName": "データシェア",
+        "telNo": "070-0000-0002",
+        "serviceStatus": "利用中",
+        "chargePlan": "20",
+        "eSim": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "mioId": "MA0000000",
+  "serviceCode": "hdc00000001",
+  "statusCode": "200",
+  "lastFiveMonthDataUnit": "GB",
+  "lastFiveMonthInfo": [
+    { "month": "4", "dataTraffic": "4.1" },
+    { "month": "5", "dataTraffic": "4.8" },
+    { "month": "6", "dataTraffic": "5.2" },
+    { "month": "7", "dataTraffic": "5.9" },
+    { "month": "8", "dataTraffic": "2.5" }
+  ],
+  "thisMonthInfo": { "month": "8", "day": "6" },
+  "thisMonthDailyInfo": [
+    { "date": "1", "dayOfWeek": "土", "dataTraffic": "500", "dataTrafficUnit": "MB" },
+    { "date": "2", "dayOfWeek": "日", "dataTraffic": "420", "dataTrafficUnit": "MB" }
+  ]
+}

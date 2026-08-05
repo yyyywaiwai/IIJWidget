@@ -1,0 +1,26 @@
+{
+  "mioId": "MA0000000",
+  "statusCode": "200",
+  "lineInfo": {
+    "hdcList": [
+      {
+        "serviceCode": "hdc00000001",
+        "lineServiceCode": "hdu00000001",
+        "groupServiceCode": "",
+        "planName": "ギガプラン 10GB",
+        "telNo": "070-0000-0001",
+        "number": "01"
+      }
+    ],
+    "hddList": [
+      {
+        "serviceCode": "hdd00000002",
+        "lineServiceCode": "hdu00000002",
+        "groupServiceCode": "hdd00000002",
+        "planName": "データシェア",
+        "telNo": "070-0000-0002",
+        "number": "02"
+      }
+    ]
+  }
+}

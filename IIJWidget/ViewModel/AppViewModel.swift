@@ -26,6 +26,7 @@ final class AppViewModel: ObservableObject {
     @Published var accentColors: AccentColorSettings = .default
     @Published var displayPreferences: DisplayPreferences = .default
     @Published var usageAlertSettings: UsageAlertSettings = .default
+    @Published private(set) var communicationMethod: CommunicationMethod = .myIIJmioGAPI
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
@@ -33,6 +34,7 @@ final class AppViewModel: ObservableObject {
     private let accentColorStore = AccentColorStore()
     private let displayPreferenceStore = DisplayPreferencesStore()
     private let usageAlertStore = UsageAlertStore()
+    private let communicationMethodStore = CommunicationMethodStore()
     private let refreshLogStore = RefreshLogStore()
 
     private var refreshTaskInFlight = false
@@ -42,6 +44,7 @@ final class AppViewModel: ObservableObject {
         accentColors = accentColorStore.load()
         displayPreferences = displayPreferenceStore.load()
         usageAlertSettings = usageAlertStore.load()
+        communicationMethod = communicationMethodStore.load()
 
         if let saved = try? credentialStore.load() {
             mioId = saved.mioId
@@ -117,6 +120,14 @@ final class AppViewModel: ObservableObject {
         usageAlertStore.save(usageAlertSettings)
     }
 
+    func updateCommunicationMethod(_ newValue: CommunicationMethod) {
+        guard communicationMethod != newValue else { return }
+        communicationMethodStore.save(newValue)
+        communicationMethod = newValue
+        lastLoginSource = nil
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
+    }
+
     var canSubmit: Bool {
         credentialFieldsHidden || currentManualCredentials() != nil
     }
@@ -124,6 +135,12 @@ final class AppViewModel: ObservableObject {
     var loginStatusText: String? {
         guard let source = lastLoginSource else { return nil }
         switch source {
+        case .gapiToken:
+            return "MyIIJmioトークンで自動ログインしました"
+        case .gapiKeychain:
+            return "キーチェーンからMyIIJmioへログインしました"
+        case .gapiManual:
+            return "入力した資格情報でMyIIJmioへログインしました"
         case .sessionCookie:
             return "セッションCookieで自動ログインしました"
         case .keychain:
@@ -151,7 +168,8 @@ final class AppViewModel: ObservableObject {
     func fetchBillDetail(for entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
         return try await widgetRefreshService.fetchBillDetail(
             entry: entry,
-            manualCredentials: credentialFieldsHidden ? nil : currentManualCredentials()
+            manualCredentials: credentialFieldsHidden ? nil : currentManualCredentials(),
+            communicationMethod: communicationMethod
         )
     }
 
@@ -194,7 +212,9 @@ final class AppViewModel: ObservableObject {
                 allowSessionReuse: !forceManualLogin,
                 allowKeychainFallback: !forceManualLogin,
                 calculateTodayFromRemaining: displayPreferences.calculateTodayFromRemaining,
-                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable
+                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable,
+                forceGAPIUpdate: trigger == .manual,
+                communicationMethod: communicationMethod
             )
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             state = .loaded(outcome.payload)
@@ -237,6 +257,16 @@ final class AppViewModel: ObservableObject {
 
     private func handleCredentialVisibility(after source: WidgetRefreshService.LoginSource) {
         switch source {
+        case .gapiToken:
+            credentialFieldsHidden = true
+        case .gapiKeychain:
+            credentialFieldsHidden = true
+            if let stored = try? credentialStore.load() {
+                mioId = stored.mioId
+                password = stored.password
+            }
+        case .gapiManual:
+            credentialFieldsHidden = false
         case .sessionCookie:
             credentialFieldsHidden = true
         case .keychain:

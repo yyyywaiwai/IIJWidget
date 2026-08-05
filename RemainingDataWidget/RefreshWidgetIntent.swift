@@ -4,7 +4,6 @@ import WidgetKit
 @available(iOSApplicationExtension 17.0, *)
 struct RefreshWidgetIntent: AppIntent {
     static var title: LocalizedStringResource { "データ更新" }
-    private let refreshService = WidgetRefreshService()
     private let dataStore = WidgetDataStore()
     private let logStore = RefreshLogStore()
     private let displayPreferenceStore = DisplayPreferencesStore()
@@ -16,6 +15,7 @@ struct RefreshWidgetIntent: AppIntent {
         }
 
         let preferences = displayPreferenceStore.load()
+        let refreshService = WidgetRefreshService()
         do {
             // 成功フラグをリセットしてから開始
             dataStore.setSuccessUntil(nil)
@@ -24,7 +24,10 @@ struct RefreshWidgetIntent: AppIntent {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
             }
 
-            let outcome = try await refreshService.refreshForWidget(calculateTodayFromRemaining: preferences.calculateTodayFromRemaining)
+            _ = try await refreshService.refreshForWidget(
+                calculateTodayFromRemaining: preferences.calculateTodayFromRemaining,
+                forceGAPIUpdate: true
+            )
             
             await MainActor.run {
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)

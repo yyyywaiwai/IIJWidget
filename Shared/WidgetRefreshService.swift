@@ -13,6 +13,9 @@ enum WidgetRefreshError: LocalizedError {
 
 struct WidgetRefreshService {
     enum LoginSource {
+        case gapiToken
+        case gapiKeychain
+        case gapiManual
         case sessionCookie
         case keychain
         case manual
@@ -30,11 +33,17 @@ struct WidgetRefreshService {
     }
 
     private let credentialStore = CredentialStore()
+    private let gapiClient = MyIIJmioAPIClient()
     private let apiClient = IIJAPIClient()
     private let widgetDataStore = WidgetDataStore()
     private let payloadStore = AggregatePayloadStore()
+    private let communicationMethodStore = CommunicationMethodStore()
     private let debugStore = DebugResponseStore.shared
-    func refreshForWidget(calculateTodayFromRemaining: Bool) async throws -> RefreshOutcome {
+    func refreshForWidget(
+        calculateTodayFromRemaining: Bool,
+        forceGAPIUpdate: Bool = false,
+        communicationMethod: CommunicationMethod? = nil
+    ) async throws -> RefreshOutcome {
         let cached = payloadStore.load()
         let isCompletePayload = {
             guard let cached else { return false }
@@ -50,7 +59,9 @@ struct WidgetRefreshService {
                 allowKeychainFallback: true,
                 fetchScope: scope,
                 calculateTodayFromRemaining: true,
-                dailyFetchMode: .tableOnly
+                dailyFetchMode: .tableOnly,
+                forceGAPIUpdate: forceGAPIUpdate,
+                communicationMethod: communicationMethod
             )
         }
 
@@ -62,7 +73,9 @@ struct WidgetRefreshService {
             allowKeychainFallback: true,
             fetchScope: .full,
             calculateTodayFromRemaining: false,
-            dailyFetchMode: .mergedPreviewAndTable
+            dailyFetchMode: .mergedPreviewAndTable,
+            forceGAPIUpdate: forceGAPIUpdate,
+            communicationMethod: communicationMethod
         )
     }
 
@@ -73,7 +86,9 @@ struct WidgetRefreshService {
         allowKeychainFallback: Bool = true,
         fetchScope: FetchScope = .full,
         calculateTodayFromRemaining: Bool = false,
-        dailyFetchMode: DailyFetchMode? = nil
+        dailyFetchMode: DailyFetchMode? = nil,
+        forceGAPIUpdate: Bool = false,
+        communicationMethod: CommunicationMethod? = nil
     ) async throws -> RefreshOutcome {
         debugStore.beginCaptureSession()
         defer { debugStore.finalizeCaptureSession() }
@@ -89,16 +104,150 @@ struct WidgetRefreshService {
         }
 
         if !allowSessionReuse {
+            gapiClient.clearPersistedSession()
             apiClient.clearPersistedSession()
         }
 
         let resolvedDailyMode: DailyFetchMode = dailyFetchMode
             ?? (calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable)
 
+        let selectedMethod = communicationMethod ?? communicationMethodStore.load()
+        switch selectedMethod {
+        case .myIIJmioGAPI:
+            return try await refreshUsingGAPI(
+                manualCredentials: manualCredentials,
+                persistManualCredentials: persistManualCredentials,
+                allowSessionReuse: allowSessionReuse,
+                allowKeychainFallback: allowKeychainFallback,
+                fetchScope: fetchScope,
+                fallbackPayload: fallbackPayload,
+                calculateTodayFromRemaining: calculateTodayFromRemaining,
+                forceUpdate: forceGAPIUpdate
+            )
+        case .legacyMemberSite:
+            return try await refreshUsingLegacyMemberSite(
+                manualCredentials: manualCredentials,
+                persistManualCredentials: persistManualCredentials,
+                allowSessionReuse: allowSessionReuse,
+                allowKeychainFallback: allowKeychainFallback,
+                fetchScope: fetchScope,
+                fallbackPayload: fallbackPayload,
+                dailyFetchMode: resolvedDailyMode,
+                calculateTodayFromRemaining: calculateTodayFromRemaining
+            )
+        }
+    }
+
+    private func refreshUsingGAPI(
+        manualCredentials: Credentials?,
+        persistManualCredentials: Bool,
+        allowSessionReuse: Bool,
+        allowKeychainFallback: Bool,
+        fetchScope: FetchScope,
+        fallbackPayload: AggregatePayload?,
+        calculateTodayFromRemaining: Bool,
+        forceUpdate: Bool
+    ) async throws -> RefreshOutcome {
+        var latestError: Error?
+
         if allowSessionReuse {
             do {
                 return finalize(
-                    payload: try await fetchUsingExistingSession(scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: resolvedDailyMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
+                    payload: try await fetchUsingExistingGAPISession(
+                        scope: fetchScope,
+                        fallback: fallbackPayload,
+                        calculateTodayFromRemaining: calculateTodayFromRemaining,
+                        forceUpdate: forceUpdate
+                    ),
+                    source: .gapiToken
+                )
+            } catch {
+                if gapiClient.isAuthenticationError(error) {
+                    gapiClient.clearPersistedSession()
+                } else {
+                    latestError = error
+                }
+                recordGAPIError(error, stage: "stored-token")
+            }
+        }
+
+        let storedCredentials: Credentials?
+        if allowKeychainFallback {
+            storedCredentials = try credentialStore.load()
+        } else {
+            storedCredentials = nil
+        }
+
+        if let storedCredentials {
+            do {
+                return finalize(
+                    payload: try await fetchWithGAPICredentials(
+                        storedCredentials,
+                        scope: fetchScope,
+                        fallback: fallbackPayload,
+                        calculateTodayFromRemaining: calculateTodayFromRemaining,
+                        forceUpdate: forceUpdate
+                    ),
+                    source: .gapiKeychain
+                )
+            } catch {
+                if gapiClient.isAuthenticationError(error) {
+                    gapiClient.clearPersistedSession()
+                }
+                recordGAPIError(error, stage: "keychain-login")
+                latestError = error
+            }
+        }
+
+        if let manual = manualCredentials, !manual.mioId.isEmpty, !manual.password.isEmpty {
+            do {
+                let payload = try await fetchWithGAPICredentials(
+                    manual,
+                    scope: fetchScope,
+                    fallback: fallbackPayload,
+                    calculateTodayFromRemaining: calculateTodayFromRemaining,
+                    forceUpdate: forceUpdate
+                )
+                if persistManualCredentials {
+                    try? credentialStore.save(manual)
+                }
+                return finalize(payload: payload, source: .gapiManual)
+            } catch {
+                if gapiClient.isAuthenticationError(error) {
+                    gapiClient.clearPersistedSession()
+                }
+                recordGAPIError(error, stage: "manual-login")
+                latestError = error
+            }
+        }
+
+        if let latestError {
+            throw latestError
+        }
+        throw WidgetRefreshError.missingCredentials
+    }
+
+    private func refreshUsingLegacyMemberSite(
+        manualCredentials: Credentials?,
+        persistManualCredentials: Bool,
+        allowSessionReuse: Bool,
+        allowKeychainFallback: Bool,
+        fetchScope: FetchScope,
+        fallbackPayload: AggregatePayload?,
+        dailyFetchMode: DailyFetchMode,
+        calculateTodayFromRemaining: Bool
+    ) async throws -> RefreshOutcome {
+        let storedCredentials: Credentials?
+        if allowKeychainFallback {
+            storedCredentials = try credentialStore.load()
+        } else {
+            storedCredentials = nil
+        }
+
+        if allowSessionReuse {
+            do {
+                return finalize(
+                    payload: try await fetchUsingExistingSession(scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
                     source: .sessionCookie
                 )
             } catch IIJAPIClientError.invalidSession {
@@ -106,15 +255,16 @@ struct WidgetRefreshService {
             }
         }
 
-        if allowKeychainFallback, let stored = try credentialStore.load() {
+        if let stored = storedCredentials {
             do {
                 return finalize(
-                    payload: try await fetchWithCredentials(stored, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: resolvedDailyMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
+                    payload: try await fetchWithCredentials(stored, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
                     source: .keychain
                 )
             } catch {
                 if apiClient.isAuthenticationError(error) {
                     try? credentialStore.delete()
+                    gapiClient.clearPersistedSession()
                 } else {
                     throw error
                 }
@@ -122,7 +272,7 @@ struct WidgetRefreshService {
         }
 
         if let manual = manualCredentials, !manual.mioId.isEmpty, !manual.password.isEmpty {
-            let payload = try await fetchWithCredentials(manual, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: resolvedDailyMode, calculateTodayFromRemaining: calculateTodayFromRemaining)
+            let payload = try await fetchWithCredentials(manual, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining)
             if persistManualCredentials {
                 try? credentialStore.save(manual)
             }
@@ -175,7 +325,11 @@ struct WidgetRefreshService {
         return nil
     }
 
-    func fetchBillDetail(entry: BillSummaryResponse.BillEntry, manualCredentials: Credentials? = nil) async throws -> BillDetailResponse {
+    func fetchBillDetail(
+        entry: BillSummaryResponse.BillEntry,
+        manualCredentials: Credentials? = nil,
+        communicationMethod: CommunicationMethod? = nil
+    ) async throws -> BillDetailResponse {
         // Check for mock credentials first
         if let manual = manualCredentials, MockPayloadProvider.isMockCredentials(manual) {
             guard let mockDetail = MockPayloadProvider.billDetail(for: entry) else {
@@ -199,6 +353,40 @@ struct WidgetRefreshService {
             return mockDetail
         }
 
+        switch communicationMethod ?? communicationMethodStore.load() {
+        case .myIIJmioGAPI:
+            return try await fetchGAPIBillDetail(entry: entry, manualCredentials: manualCredentials)
+        case .legacyMemberSite:
+            return try await fetchLegacyBillDetail(entry: entry, manualCredentials: manualCredentials)
+        }
+    }
+
+    private func fetchGAPIBillDetail(
+        entry: BillSummaryResponse.BillEntry,
+        manualCredentials: Credentials?
+    ) async throws -> BillDetailResponse {
+        do {
+            return try await gapiClient.fetchBillDetailUsingExistingSession(entry: entry)
+        } catch {
+            guard gapiClient.isAuthenticationError(error) else { throw error }
+            gapiClient.clearPersistedSession()
+        }
+
+        if let stored = try? credentialStore.load() {
+            return try await gapiClient.fetchBillDetail(entry: entry, credentials: stored)
+        }
+
+        if let manual = manualCredentials {
+            return try await gapiClient.fetchBillDetail(entry: entry, credentials: manual)
+        }
+
+        throw WidgetRefreshError.missingCredentials
+    }
+
+    private func fetchLegacyBillDetail(
+        entry: BillSummaryResponse.BillEntry,
+        manualCredentials: Credentials?
+    ) async throws -> BillDetailResponse {
         do {
             return try await apiClient.fetchBillDetail(entry: entry)
         } catch {
@@ -225,6 +413,7 @@ struct WidgetRefreshService {
     }
 
     func clearSessionArtifacts() {
+        gapiClient.clearPersistedSession()
         apiClient.clearPersistedSession()
         payloadStore.clear()
         widgetDataStore.clear()
@@ -245,6 +434,51 @@ struct WidgetRefreshService {
             let payload = buildTopOnlyPayload(top: top, fallback: fallback)
             return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
         }
+    }
+
+    private func fetchUsingExistingGAPISession(
+        scope: FetchScope,
+        fallback: AggregatePayload?,
+        calculateTodayFromRemaining: Bool,
+        forceUpdate: Bool
+    ) async throws -> AggregatePayload {
+        switch scope {
+        case .full:
+            let payload = try await gapiClient.fetchAllUsingExistingSession(forceUpdate: forceUpdate)
+            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
+        case .topOnly:
+            let top = try await gapiClient.fetchTopUsingExistingSession(forceUpdate: forceUpdate)
+            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
+            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
+        }
+    }
+
+    private func fetchWithGAPICredentials(
+        _ credentials: Credentials,
+        scope: FetchScope,
+        fallback: AggregatePayload?,
+        calculateTodayFromRemaining: Bool,
+        forceUpdate: Bool
+    ) async throws -> AggregatePayload {
+        switch scope {
+        case .full:
+            let payload = try await gapiClient.fetchAll(credentials: credentials, forceUpdate: forceUpdate)
+            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
+        case .topOnly:
+            let top = try await gapiClient.fetchTop(credentials: credentials, forceUpdate: forceUpdate)
+            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
+            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
+        }
+    }
+
+    private func recordGAPIError(_ error: Error, stage: String) {
+        debugStore.appendResponse(
+            title: "GAPI request failed",
+            path: "gapi/\(stage)",
+            category: .api,
+            rawText: error.localizedDescription,
+            formattedText: nil
+        )
     }
 
     private func fetchWithCredentials(

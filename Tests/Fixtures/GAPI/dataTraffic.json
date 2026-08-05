@@ -1,0 +1,77 @@
+{
+  "mioId": "MA0000000",
+  "statusCode": "200",
+  "dataTraffic": {
+    "hdcList": [
+      {
+        "serviceCode": "hdc00000001",
+        "lineServiceCode": "hdu00000001",
+        "groupServiceCode": "",
+        "planName": "ギガプラン 10GB",
+        "telNo": "070-0000-0001",
+        "msIsdn": "70000000001",
+        "couponValue": 7.5,
+        "expireList": [
+          {
+            "expireYear": "2026",
+            "expireMonth": "8",
+            "remainingDataTraffic": 5.0,
+            "dataUnit": "GB"
+          },
+          {
+            "expireYear": "2026",
+            "expireMonth": "9",
+            "remainingDataTraffic": 2.5,
+            "dataUnit": "GB"
+          }
+        ],
+        "thisMonthDataList": {
+          "availableDataTraffic": "7.5",
+          "availableDataTrafficUnit": "GB",
+          "maxDataTraffic": 10,
+          "maxDataTrafficUnit": "GB",
+          "couponStatus": 1,
+          "regulationStatus": 0,
+          "dataShare": 0,
+          "usePeriod": "1日-末日"
+        },
+        "lastSevenDaysDataList": {
+          "lastSevenDays": "7日間",
+          "lastSevenDaysDataHighUnit": "MB",
+          "lastSevenDaysDataLowUnit": "MB",
+          "dailyDataList": [
+            { "month": "8", "date": "1", "dayOfWeek": "土", "high": "100", "low": "5" }
+          ]
+        }
+      }
+    ],
+    "hddList": [
+      {
+        "serviceCode": "hdd00000002",
+        "planCode": "20",
+        "lineServiceCodeList": [
+          {
+            "lineServiceCode": "hdu00000002",
+            "groupServiceCode": "hdd00000002",
+            "planName": "データシェア",
+            "telNo": "070-0000-0002",
+            "msIsdn": "70000000002",
+            "expireList": [],
+            "thisMonthDataList": {
+              "availableDataTraffic": 12,
+              "availableDataTrafficUnit": "GB",
+              "maxDataTraffic": "20",
+              "maxDataTrafficUnit": "GB",
+              "couponStatus": "1",
+              "regulationStatus": "0",
+              "dataShare": "1",
+              "usePeriod": "1日-末日"
+            }
+          }
+        ]
+      }
+    ],
+    "mainHdd": [],
+    "pullDownNameList": []
+  }
+}

@@ -46,22 +46,22 @@ struct MonthlyUsageChartCard: View {
       } else {
         chartContent
           .frame(height: 220)
-          .onAppear {
-            rebuildPoints()
-          }
-          .onChange(of: services) { _ in
-            rebuildPoints()
-          }
-          .onChange(of: animationTrigger) { _ in
-            triggerBarAnimation()
-          }
-          .onChange(of: animationToken) { _ in
-            triggerBarAnimation()
-          }
-          .onDisappear {
-            animateBars = false
-          }
       }
+    }
+    .onAppear {
+      rebuildPoints()
+    }
+    .onChange(of: services) {
+      rebuildPoints()
+    }
+    .onChange(of: animationTrigger) {
+      triggerBarAnimation()
+    }
+    .onChange(of: animationToken) {
+      triggerBarAnimation()
+    }
+    .onDisappear {
+      animateBars = false
     }
   }
 
@@ -148,8 +148,11 @@ struct MonthlyUsageChartCard: View {
         Color.clear
           .onAppear {
             cardWidth = proxy.size.width
+            if currentDisplayCount != cachedDisplayCount {
+              rebuildPoints()
+            }
           }
-          .onChange(of: proxy.size) { newSize in
+          .onChange(of: proxy.size) { _, newSize in
             cardWidth = newSize.width
             if currentDisplayCount != cachedDisplayCount {
               rebuildPoints()
@@ -201,20 +204,15 @@ struct MonthlyUsageChartCard: View {
 
   private func rebuildPoints() {
     let targetCount = currentDisplayCount
-    let servicesSnapshot = services
-    DispatchQueue.global(qos: .userInitiated).async {
-      let nextPoints = Array(monthlyChartPoints(from: servicesSnapshot).suffix(targetCount))
-      let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
-      DispatchQueue.main.async {
-        if cachedDisplayCount == targetCount && animationToken == token {
-          return
-        }
-        cachedPoints = nextPoints
-        cachedDisplayCount = targetCount
-        selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
-        animationToken = token
-      }
+    let nextPoints = Array(monthlyChartPoints(from: services).suffix(targetCount))
+    let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
+    if cachedDisplayCount == targetCount && animationToken == token {
+      return
     }
+    cachedPoints = nextPoints
+    cachedDisplayCount = targetCount
+    selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
+    animationToken = token
   }
 
   private func index(from value: Double) -> Int? {
@@ -243,7 +241,8 @@ struct MonthlyUsageChartCard: View {
 
   private func triggerBarAnimation() {
     animateBars = false
-    DispatchQueue.main.async {
+    Task { @MainActor in
+      await Task.yield()
       withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
         animateBars = true
       }
@@ -252,37 +251,36 @@ struct MonthlyUsageChartCard: View {
 
   @ViewBuilder
   private func selectionCalloutLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
-    let plotFrame = proxy.plotAreaFrame
-    let rect = geometry[plotFrame]
+    if let plotFrame = proxy.plotFrame {
+      let rect = geometry[plotFrame]
 
-    if let selectedIndex,
-      let selectedPoint,
-      rect != .null,
-      let xPosition = proxy.position(forX: centeredValue(for: selectedIndex))
-    {
-      let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
-      let calloutHeight: CGFloat = 44
-      let gap: CGFloat = 8
-      let candidateY = rect.minY + barTopY - (calloutHeight + gap)
-      let clampedY = max(rect.minY - 12, candidateY)
+      if let selectedIndex,
+        let selectedPoint,
+        rect != .null,
+        let xPosition = proxy.position(forX: centeredValue(for: selectedIndex))
+      {
+        let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
+        let calloutHeight: CGFloat = 44
+        let gap: CGFloat = 8
+        let candidateY = rect.minY + barTopY - (calloutHeight + gap)
+        let clampedY = max(rect.minY - 12, candidateY)
 
-      ChartCallout(
-        title: selectedPoint.displayLabel,
-        valueText: String(format: "%.1fGB", selectedPoint.value)
-      )
-      .position(
-        x: rect.minX + xPosition,
-        y: clampedY
-      )
-    } else {
-      EmptyView()
+        ChartCallout(
+          title: selectedPoint.displayLabel,
+          valueText: String(format: "%.1fGB", selectedPoint.value)
+        )
+        .position(
+          x: rect.minX + xPosition,
+          y: clampedY
+        )
+      }
     }
   }
 
   private func nearestIndex(from location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy)
     -> Int?
   {
-    let plotFrame = proxy.plotAreaFrame
+    guard let plotFrame = proxy.plotFrame else { return nil }
     let rect = geometry[plotFrame]
     guard rect != .null else { return nil }
 
@@ -357,22 +355,22 @@ struct DailyUsageChartCard: View {
       } else {
         chartContent
           .frame(height: 220)
-          .onAppear {
-            rebuildPoints()
-          }
-          .onChange(of: services) { _ in
-            rebuildPoints()
-          }
-          .onChange(of: animationTrigger) { _ in
-            triggerBarAnimation()
-          }
-          .onChange(of: animationToken) { _ in
-            triggerBarAnimation()
-          }
-          .onDisappear {
-            animateBars = false
-          }
       }
+    }
+    .onAppear {
+      rebuildPoints()
+    }
+    .onChange(of: services) {
+      rebuildPoints()
+    }
+    .onChange(of: animationTrigger) {
+      triggerBarAnimation()
+    }
+    .onChange(of: animationToken) {
+      triggerBarAnimation()
+    }
+    .onDisappear {
+      animateBars = false
     }
   }
 
@@ -459,8 +457,11 @@ struct DailyUsageChartCard: View {
         Color.clear
           .onAppear {
             cardWidth = proxy.size.width
+            if currentDisplayCount != cachedDisplayCount {
+              rebuildPoints()
+            }
           }
-          .onChange(of: proxy.size) { newSize in
+          .onChange(of: proxy.size) { _, newSize in
             cardWidth = newSize.width
             if currentDisplayCount != cachedDisplayCount {
               rebuildPoints()
@@ -512,20 +513,15 @@ struct DailyUsageChartCard: View {
 
   private func rebuildPoints() {
     let targetCount = currentDisplayCount
-    let servicesSnapshot = services
-    DispatchQueue.global(qos: .userInitiated).async {
-      let nextPoints = Array(dailyChartPoints(from: servicesSnapshot).suffix(targetCount))
-      let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
-      DispatchQueue.main.async {
-        if cachedDisplayCount == targetCount && animationToken == token {
-          return
-        }
-        cachedPoints = nextPoints
-        cachedDisplayCount = targetCount
-        selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
-        animationToken = token
-      }
+    let nextPoints = Array(dailyChartPoints(from: services).suffix(targetCount))
+    let token = nextPoints.map { "\($0.id)-\($0.value)" }.joined(separator: "|")
+    if cachedDisplayCount == targetCount && animationToken == token {
+      return
     }
+    cachedPoints = nextPoints
+    cachedDisplayCount = targetCount
+    selectedIndex = nextPoints.isEmpty ? nil : nextPoints.count - 1
+    animationToken = token
   }
 
   private func index(from value: Double) -> Int? {
@@ -554,7 +550,8 @@ struct DailyUsageChartCard: View {
 
   private func triggerBarAnimation() {
     animateBars = false
-    DispatchQueue.main.async {
+    Task { @MainActor in
+      await Task.yield()
       withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
         animateBars = true
       }
@@ -563,36 +560,36 @@ struct DailyUsageChartCard: View {
 
   @ViewBuilder
   private func selectionCalloutLayer(proxy: ChartProxy, geometry: GeometryProxy) -> some View {
-    let plotFrame = proxy.plotAreaFrame
-    let rect = geometry[plotFrame]
+    if let plotFrame = proxy.plotFrame {
+      let rect = geometry[plotFrame]
 
-    if let selectedIndex,
-      let selectedPoint,
-      rect != .null,
-      let xPosition = proxy.position(forX: centeredValue(for: selectedIndex))
-    {
-      let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
-      let calloutHeight: CGFloat = 44
-      let gap: CGFloat = 8
-      let candidateY = rect.minY + barTopY - (calloutHeight + gap)
-      let clampedY = max(rect.minY - 12, candidateY)
+      if let selectedIndex,
+        let selectedPoint,
+        rect != .null,
+        let xPosition = proxy.position(forX: centeredValue(for: selectedIndex))
+      {
+        let barTopY = proxy.position(forY: selectedPoint.value) ?? 0
+        let calloutHeight: CGFloat = 44
+        let gap: CGFloat = 8
+        let candidateY = rect.minY + barTopY - (calloutHeight + gap)
+        let clampedY = max(rect.minY - 12, candidateY)
 
-      ChartCallout(
-        title: selectedPoint.displayLabel, valueText: String(format: "%.0fMB", selectedPoint.value)
-      )
-      .position(
-        x: rect.minX + xPosition,
-        y: clampedY
-      )
-    } else {
-      EmptyView()
+        ChartCallout(
+          title: selectedPoint.displayLabel,
+          valueText: String(format: "%.0fMB", selectedPoint.value)
+        )
+        .position(
+          x: rect.minX + xPosition,
+          y: clampedY
+        )
+      }
     }
   }
 
   private func nearestIndex(from location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy)
     -> Int?
   {
-    let plotFrame = proxy.plotAreaFrame
+    guard let plotFrame = proxy.plotFrame else { return nil }
     let rect = geometry[plotFrame]
     guard rect != .null else { return nil }
 

@@ -20,6 +20,23 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("データ取得方式", selection: Binding(
+                        get: { viewModel.communicationMethod },
+                        set: viewModel.updateCommunicationMethod
+                    )) {
+                        ForEach(CommunicationMethod.allCases) { method in
+                            Text(method.displayName)
+                                .tag(method)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } header: {
+                    Text("通信方式")
+                } footer: {
+                    Text("\(viewModel.communicationMethod.explanation) 次回のデータ更新から反映され、別方式への自動切替は行いません。")
+                }
+
                 Section(header: HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("使いすぎアラート")
                     InfoTipButton(
@@ -227,7 +244,7 @@ struct SettingsTab: View {
                 }
             }
         }
-        .onChange(of: viewModel.usageAlertSettings.isEnabled) { isEnabled in
+        .onChange(of: viewModel.usageAlertSettings.isEnabled) { _, isEnabled in
             if !isEnabled {
                 usageAlertFocusedField = nil
             }

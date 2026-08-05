@@ -1,0 +1,44 @@
+{
+  "mioId": "MA0000000",
+  "statusCode": 200,
+  "billingMonth": "8",
+  "billingPeriod": "2026/07/01",
+  "billingTotalAmount": "2200",
+  "billingSummary": [
+    {
+      "billingMonth": "2026/08",
+      "billingNo": "100000000001",
+      "billingTotalAmount": "2200",
+      "remarksList": ["テスト用の匿名化済み請求です"],
+      "detailDataList": [
+        {
+          "label": "ギガプラン",
+          "subTotal": 2200,
+          "detailItemList": [
+            {
+              "title": "月額料金",
+              "amount": 2000,
+              "quantity": "1",
+              "unitPrice": 2000,
+              "remarks": "匿名化済み"
+            },
+            {
+              "title": "消費税",
+              "amount": 200,
+              "quantity": "1",
+              "unitPrice": 200,
+              "remarks": "匿名化済み"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "billingMonth": "2026/07",
+      "billingNo": "100000000002",
+      "billingTotalAmount": "2100",
+      "remarksList": [],
+      "detailDataList": []
+    }
+  ]
+}

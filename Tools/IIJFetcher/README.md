@@ -2,6 +2,10 @@
 
 IIJFetcher は IIJmio 会員サイトの非公開 API を直接叩き、通信量・請求情報・回線状態・月別/日別利用量を JSON で取得するための検証用 CLI です。ログイン後に以下のモードを選べます。
 
+> アプリ本体は MyIIJmio 公式アプリの GAPI を優先し、このCLIの会員サイト方式をフォールバックとして利用します。
+> GAPI の実通信・モデル変換検証は `Tools/frida/README.md` と `validate_gapi_live.swift` /
+> `validate_gapi_responses.swift` を参照してください。このCLIはフォールバック経路の独立検証用として維持します。
+
 - `--mode top` : `/api/member/top`（残量カードやクーポン情報）
 - `--mode bill` : `/api/member/getBillSummary`（最大 7 ヶ月分の請求サマリ）
 - `--mode status` : `/api/member/getServiceStatus`（各回線の稼働状態）
