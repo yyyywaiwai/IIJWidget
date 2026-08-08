@@ -624,6 +624,12 @@ struct UsageAlertSettings: Codable, Equatable {
         if let dailyThresholdMB { copy.dailyThresholdMB = dailyThresholdMB }
         return copy
     }
+
+    /// GB 単位の値がしきい値 (MB) を超えているか。
+    /// 換算係数は Shared 内の他の処理と揃えて 1024 とする。
+    func exceedsMonthlyThreshold(totalGB: Double, threshold: Int) -> Bool {
+        (totalGB * 1024) > Double(threshold)
+    }
 }
 
 struct UsageAlertStore {

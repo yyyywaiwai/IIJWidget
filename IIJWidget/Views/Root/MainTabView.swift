@@ -16,7 +16,9 @@ struct MainTabView: View {
                     usageAlertSettings: viewModel.usageAlertSettings,
                     defaultUsageChart: viewModel.displayPreferences.defaultUsageChart,
                     hidePhoneOnScreenshot: viewModel.displayPreferences.hidePhoneOnScreenshot,
-                    saveDefaultUsageChart: viewModel.updateDefaultUsageChart
+                    saveDefaultUsageChart: viewModel.updateDefaultUsageChart,
+                    refresh: refresh,
+                    presentOnboarding: presentOnboarding
                 )
                     .tabItem { Label(AppSection.home.title, systemImage: AppSection.home.iconName) }
                     .tag(AppSection.home)
@@ -28,7 +30,8 @@ struct MainTabView: View {
                     accentColors: viewModel.accentColors,
                     usageAlertSettings: viewModel.usageAlertSettings,
                     showsLowSpeedUsage: viewModel.displayPreferences.showsLowSpeedUsage,
-                    hidePhoneOnScreenshot: viewModel.displayPreferences.hidePhoneOnScreenshot
+                    hidePhoneOnScreenshot: viewModel.displayPreferences.hidePhoneOnScreenshot,
+                    refresh: refresh
                 )
                 .tabItem { Label(AppSection.usage.title, systemImage: AppSection.usage.iconName) }
                 .tag(AppSection.usage)
@@ -37,7 +40,8 @@ struct MainTabView: View {
                     viewModel: viewModel,
                     bill: payload?.bill,
                     accentColors: viewModel.accentColors,
-                    showsBillingChart: viewModel.displayPreferences.showsBillingChart
+                    showsBillingChart: viewModel.displayPreferences.showsBillingChart,
+                    refresh: refresh
                 )
                     .tabItem { Label(AppSection.billing.title, systemImage: AppSection.billing.iconName) }
                     .tag(AppSection.billing)
@@ -53,5 +57,11 @@ struct MainTabView: View {
             .toolbarBackground(.ultraThinMaterial, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
         }
+    }
+
+    /// 各タブの引っ張って更新から呼ぶ。完了までを await するので
+    /// スピナーが実際の取得時間と一致する。
+    private func refresh() async {
+        _ = await viewModel.refresh(trigger: .manual)
     }
 }

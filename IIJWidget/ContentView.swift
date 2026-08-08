@@ -23,9 +23,14 @@ struct ContentView: View {
                     Button {
                         viewModel.refreshManually()
                     } label: {
-                        Label("最新取得", systemImage: "arrow.clockwise")
+                        if isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("最新取得", systemImage: "arrow.clockwise")
+                        }
                     }
-                    .disabled(!viewModel.canSubmit || isLoading)
+                    .disabled(!viewModel.canSubmit)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -33,13 +38,14 @@ struct ContentView: View {
                     StateFeedbackBanner(message: message) {
                         dismissedErrorToastID = errorToastID
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .padding(.bottom, 64)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.sm)
+                    .padding(.bottom, AppSpacing.xl)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .overlay {
-                if isLoading {
+                if isLoading && loadedPayload == nil {
                     LoadingOverlay()
                 }
             }
@@ -59,7 +65,7 @@ struct ContentView: View {
         .task {
             await viewModel.triggerAutomaticRefreshIfNeeded()
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task { await viewModel.triggerAutomaticRefreshIfNeeded() }
         }
@@ -68,9 +74,10 @@ struct ContentView: View {
             errorToastID = UUID()
             dismissedErrorToastID = nil
         }
-        .onChange(of: viewModel.hasStoredCredentials) { _ in
+        .onChange(of: viewModel.hasStoredCredentials) { _, _ in
             evaluateOnboardingPresentation()
         }
+        .sensoryFeedback(.error, trigger: errorToastID)
     }
 
     private var loadedPayload: AggregatePayload? {

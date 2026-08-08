@@ -8,6 +8,7 @@ struct UsageListTab: View {
   let usageAlertSettings: UsageAlertSettings
   let showsLowSpeedUsage: Bool
   let hidePhoneOnScreenshot: Bool
+  let refresh: () async -> Void
 
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @State private var selectedTab: UsageTab = .monthly
@@ -15,7 +16,7 @@ struct UsageListTab: View {
 
   private var isRegularWidth: Bool { horizontalSizeClass == .regular }
 
-  fileprivate enum UsageTab: String, CaseIterable {
+  fileprivate enum UsageTab: String, CaseIterable, Hashable {
     case monthly
     case daily
 
@@ -42,28 +43,27 @@ struct UsageListTab: View {
   }
 
   var body: some View {
-    GeometryReader { geometry in
-      let useTwoColumn = isRegularWidth
+    let useTwoColumn = isRegularWidth
 
-      Group {
+    return Group {
         if useTwoColumn {
           ScrollView {
-            VStack(spacing: 24) {
-              HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                  SectionHeaderLabel(
+            VStack(spacing: AppSpacing.xxl) {
+              HStack(alignment: .top, spacing: AppSpacing.xxl) {
+                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                  SectionHeader(
                     title: "月別利用量",
-                    icon: "calendar",
+                    systemImage: "calendar",
                     gradientColors: accentColors.palette(for: .monthlyChart).chartGradient
                   )
                   monthlyContent
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
 
-                VStack(alignment: .leading, spacing: 16) {
-                  SectionHeaderLabel(
+                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                  SectionHeader(
                     title: "日別利用量",
-                    icon: "clock",
+                    systemImage: "clock",
                     gradientColors: accentColors.palette(for: .dailyChart).chartGradient
                   )
                   dailyContent
@@ -73,14 +73,21 @@ struct UsageListTab: View {
 
               serviceStatusSection
             }
-            .padding(24)
+            .padding(AppSpacing.xxl)
           }
+          .refreshable { await refresh() }
         } else {
           VStack(spacing: 0) {
-            UsageTabSwitcher(selectedTab: $selectedTab, accentColors: accentColors)
-              .padding(.horizontal)
-              .padding(.top, 16)
-              .padding(.bottom, 12)
+            SegmentedSelector(
+              items: UsageTab.allCases,
+              selection: $selectedTab,
+              title: \.title,
+              systemImage: \.icon,
+              gradientColors: { accentColors.palette(for: $0.accentRole).chartGradient }
+            )
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.top, AppSpacing.lg)
+            .padding(.bottom, AppSpacing.md)
 
             TabView(selection: $selectedTab) {
               usagePage {
@@ -97,28 +104,37 @@ struct UsageListTab: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
         }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(.systemGroupedBackground))
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color(.systemGroupedBackground))
   }
+
   private func usagePage<Content: View>(@ViewBuilder content: () -> Content) -> some View {
     ScrollView {
-      VStack(spacing: 20) {
+      VStack(spacing: AppSpacing.xl) {
         content()
         serviceStatusSection
       }
-      .padding(.horizontal)
-      .padding(.vertical)
+      .padding(.horizontal, AppSpacing.lg)
+      .padding(.vertical, AppSpacing.lg)
     }
+    .refreshable { await refresh() }
   }
 
   private var monthlyContent: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: AppSpacing.lg) {
       if monthly.isEmpty {
-        EmptyUsageRow(text: "まだ月別データがありません", icon: "calendar.badge.clock")
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 40)
+        EmptyStateView(
+          title: "月別データがありません",
+          message: "最新の利用量を取得すると、ここに月ごとの通信量が表示されます。",
+          systemImage: "calendar.badge.clock"
+        ) {
+          Button("最新取得") {
+            Task { await refresh() }
+          }
+          .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity)
       } else {
         MonthlyUsageSection(
           services: monthly,
@@ -132,11 +148,19 @@ struct UsageListTab: View {
   }
 
   private var dailyContent: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: AppSpacing.lg) {
       if daily.isEmpty {
-        EmptyUsageRow(text: "まだ日別データがありません", icon: "clock.badge.questionmark")
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 40)
+        EmptyStateView(
+          title: "日別データがありません",
+          message: "最新の利用量を取得すると、ここに日ごとの通信量が表示されます。",
+          systemImage: "clock.badge.questionmark"
+        ) {
+          Button("最新取得") {
+            Task { await refresh() }
+          }
+          .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity)
       } else {
         DailyUsageSection(
           services: daily,
@@ -152,120 +176,23 @@ struct UsageListTab: View {
   @ViewBuilder
   private var serviceStatusSection: some View {
     if let serviceStatus {
-      VStack(alignment: .leading, spacing: 12) {
+      VStack(alignment: .leading, spacing: AppSpacing.md) {
         DisclosureGroup(isExpanded: $isStatusExpanded) {
           ServiceStatusList(status: serviceStatus)
-            .padding(.top, 8)
+            .padding(.top, AppSpacing.sm)
         } label: {
-          SectionHeaderLabel(
+          SectionHeader(
             title: "回線ステータス",
-            icon: "dot.radiowaves.left.and.right",
+            systemImage: "dot.radiowaves.left.and.right",
             gradientColors: [
               Color(red: 0.16, green: 0.56, blue: 0.35), Color(red: 0.39, green: 0.77, blue: 0.48),
             ]
           )
         }
       }
-      .padding()
-      .background {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-          .fill(.ultraThinMaterial)
-      }
+      .padding(AppSpacing.lg)
+      .cardSurface(cornerRadius: AppRadius.lg, material: .ultraThinMaterial, elevation: .flat)
     }
-  }
-}
-
-private struct UsageTabSwitcher: View {
-  @Binding var selectedTab: UsageListTab.UsageTab
-  let accentColors: AccentColorSettings
-
-  var body: some View {
-    HStack(spacing: 0) {
-      ForEach(UsageListTab.UsageTab.allCases, id: \.self) { tab in
-        let gradientColors = accentColors.palette(for: tab.accentRole).chartGradient
-        Button {
-          withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            selectedTab = tab
-          }
-        } label: {
-          HStack(spacing: 8) {
-            Image(systemName: tab.icon)
-              .font(.system(size: 14, weight: .semibold))
-            Text(tab.title)
-              .font(.system(.subheadline, design: .rounded, weight: .bold))
-          }
-          .foregroundStyle(selectedTab == tab ? .white : .secondary)
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
-          .frame(maxWidth: .infinity)
-          .contentShape(Rectangle())
-          .background {
-            if selectedTab == tab {
-              Capsule()
-                .fill(
-                  LinearGradient(
-                    colors: gradientColors,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                  )
-                )
-                .shadow(
-                  color: gradientColors.first?.opacity(0.4) ?? .clear,
-                  radius: 8,
-                  x: 0,
-                  y: 4
-                )
-            }
-          }
-        }
-        .buttonStyle(.plain)
-      }
-    }
-    .padding(4)
-    .background(
-      Capsule()
-        .fill(Color.primary.opacity(0.06))
-    )
-  }
-}
-
-private struct SectionHeaderLabel: View {
-  let title: String
-  let icon: String
-  let gradientColors: [Color]
-
-  var body: some View {
-    HStack(spacing: 10) {
-      Image(systemName: icon)
-        .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(
-          LinearGradient(
-            colors: gradientColors,
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-      Text(title)
-        .font(.system(.headline, design: .rounded, weight: .bold))
-    }
-  }
-}
-
-private struct EmptyUsageRow: View {
-  let text: String
-  let icon: String
-
-  var body: some View {
-    HStack(spacing: 12) {
-      Image(systemName: icon)
-        .font(.system(size: 24))
-        .foregroundStyle(.tertiary)
-      Text(text)
-        .font(.system(.subheadline, design: .rounded))
-        .foregroundStyle(.secondary)
-    }
-    .frame(maxWidth: .infinity, alignment: .center)
-    .padding(.vertical, 20)
   }
 }
 
@@ -297,12 +224,11 @@ struct MonthlyUsageServiceCard: View {
   let usageAlertSettings: UsageAlertSettings
   let showsLowSpeedUsage: Bool
   let hidePhoneOnScreenshot: Bool
-  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let gradientColors = accentColors.palette(for: .monthlyChart).chartGradient
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(spacing: 8) {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
+      HStack(spacing: AppSpacing.sm) {
         Image(systemName: "simcard.fill")
           .font(.system(size: 12, weight: .medium))
           .foregroundStyle(
@@ -312,6 +238,7 @@ struct MonthlyUsageServiceCard: View {
               endPoint: .bottomTrailing
             )
           )
+          .accessibilityHidden(true)
         ScreenshotProtectedText(
           service.titlePrimary,
           font: .subheadline,
@@ -337,30 +264,23 @@ struct MonthlyUsageServiceCard: View {
             hasData: entry.hasData,
             isAlert: isAlert(entry: entry),
             showsLowSpeedUsage: showsLowSpeedUsage,
+            alertColor: alertColor,
             isLast: index == service.entries.count - 1
           )
         }
       }
     }
-    .padding(16)
-    .background {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .fill(.ultraThinMaterial)
-        .overlay {
-          RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(
-              LinearGradient(
-                colors: [
-                  gradientColors.first?.opacity(0.3) ?? .clear,
-                  gradientColors.last?.opacity(0.1) ?? .clear,
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-              ),
-              lineWidth: 1
-            )
-        }
-    }
+    .padding(AppSpacing.lg)
+    .cardSurface(
+      cornerRadius: AppRadius.md,
+      material: .ultraThinMaterial,
+      stroke: .tinted(gradientColors),
+      elevation: .flat
+    )
+  }
+
+  private var alertColor: Color {
+    accentColors.palette(for: .usageAlertWarning).previewSymbolColor
   }
 
   private func isAlert(entry: MonthlyUsageEntry) -> Bool {
@@ -368,7 +288,7 @@ struct MonthlyUsageServiceCard: View {
       return false
     }
     let totalGB = (entry.highSpeedGB ?? 0) + (entry.lowSpeedGB ?? 0)
-    return (totalGB * 1024) > Double(threshold)
+    return usageAlertSettings.exceedsMonthlyThreshold(totalGB: totalGB, threshold: threshold)
   }
 }
 
@@ -400,12 +320,11 @@ struct DailyUsageServiceCard: View {
   let usageAlertSettings: UsageAlertSettings
   let showsLowSpeedUsage: Bool
   let hidePhoneOnScreenshot: Bool
-  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let gradientColors = accentColors.palette(for: .dailyChart).chartGradient
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(spacing: 8) {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
+      HStack(spacing: AppSpacing.sm) {
         Image(systemName: "simcard.fill")
           .font(.system(size: 12, weight: .medium))
           .foregroundStyle(
@@ -415,6 +334,7 @@ struct DailyUsageServiceCard: View {
               endPoint: .bottomTrailing
             )
           )
+          .accessibilityHidden(true)
         ScreenshotProtectedText(
           service.titlePrimary,
           font: .subheadline,
@@ -440,30 +360,23 @@ struct DailyUsageServiceCard: View {
             hasData: entry.hasData,
             isAlert: isAlert(entry: entry),
             showsLowSpeedUsage: showsLowSpeedUsage,
+            alertColor: alertColor,
             isLast: index == service.entries.count - 1
           )
         }
       }
     }
-    .padding(16)
-    .background {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .fill(.ultraThinMaterial)
-        .overlay {
-          RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(
-              LinearGradient(
-                colors: [
-                  gradientColors.first?.opacity(0.3) ?? .clear,
-                  gradientColors.last?.opacity(0.1) ?? .clear,
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-              ),
-              lineWidth: 1
-            )
-        }
-    }
+    .padding(AppSpacing.lg)
+    .cardSurface(
+      cornerRadius: AppRadius.md,
+      material: .ultraThinMaterial,
+      stroke: .tinted(gradientColors),
+      elevation: .flat
+    )
+  }
+
+  private var alertColor: Color {
+    accentColors.palette(for: .usageAlertWarning).previewSymbolColor
   }
 
   private func isAlert(entry: DailyUsageEntry) -> Bool {
@@ -483,36 +396,60 @@ private struct UsageEntryRow: View {
   let hasData: Bool
   let isAlert: Bool
   let showsLowSpeedUsage: Bool
+  let alertColor: Color
   let isLast: Bool
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(alignment: .center) {
+      HStack(alignment: .center, spacing: AppSpacing.sm) {
         Text(label)
           .font(.system(.callout, design: .rounded))
           .monospacedDigit()
           .foregroundStyle(.secondary)
-        Spacer()
+        Spacer(minLength: AppSpacing.sm)
         if hasData {
+          // 色だけに頼らず記号でも警告を伝える (色覚特性への配慮)。
+          if isAlert {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(alertColor)
+              .accessibilityHidden(true)
+          }
           UsageBreakdownView(
             highSpeedText: highSpeedText,
             lowSpeedText: lowSpeedText,
             isAlert: isAlert,
-            showsLowSpeedUsage: showsLowSpeedUsage
+            showsLowSpeedUsage: showsLowSpeedUsage,
+            alertColor: alertColor
           )
         } else if let note {
           Text(note)
             .font(.system(.caption, design: .rounded))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
         }
       }
-      .padding(.vertical, 10)
+      .padding(.vertical, AppSpacing.sm + 2)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(label)
+      .accessibilityValue(accessibilityValueText)
 
       if !isLast {
         Divider()
           .opacity(0.5)
       }
     }
+  }
+
+  private var accessibilityValueText: String {
+    guard hasData else { return note ?? "データなし" }
+    var parts: [String] = ["高速 \(highSpeedText ?? "-")"]
+    if showsLowSpeedUsage {
+      parts.append("低速 \(lowSpeedText ?? "-")")
+    }
+    if isAlert {
+      parts.append("使いすぎアラートのしきい値を超えています")
+    }
+    return parts.joined(separator: "、")
   }
 }
 
@@ -521,31 +458,30 @@ private struct UsageBreakdownView: View {
   let lowSpeedText: String?
   let isAlert: Bool
   let showsLowSpeedUsage: Bool
+  let alertColor: Color
 
   var body: some View {
     if showsLowSpeedUsage {
       VStack(alignment: .trailing, spacing: 2) {
-        HStack(spacing: 4) {
+        HStack(spacing: AppSpacing.xs) {
           Image(systemName: "bolt.fill")
             .font(.system(size: 9))
           Text(highSpeedText ?? "-")
         }
-        HStack(spacing: 4) {
+        HStack(spacing: AppSpacing.xs) {
           Image(systemName: "tortoise.fill")
             .font(.system(size: 9))
           Text(lowSpeedText ?? "-")
         }
       }
       .font(.system(.caption, design: .rounded, weight: .medium))
-      .foregroundStyle(isAlert ? .orange : .secondary)
+      .monospacedDigit()
+      .foregroundStyle(isAlert ? AnyShapeStyle(alertColor) : AnyShapeStyle(.secondary))
     } else {
       Text(highSpeedText ?? "-")
         .font(.system(.title3, design: .rounded, weight: .bold))
         .monospacedDigit()
-        .foregroundStyle(isAlert ? .orange : .primary)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("高速通信の利用量")
-        .accessibilityValue(highSpeedText ?? "-")
+        .foregroundStyle(isAlert ? AnyShapeStyle(alertColor) : AnyShapeStyle(.primary))
     }
   }
 }
@@ -554,59 +490,65 @@ struct ServiceStatusList: View {
   let status: ServiceStatusResponse
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
       ForEach(status.serviceInfoList) { item in
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+          HStack(spacing: AppSpacing.xs + 2) {
             Image(systemName: "tag.fill")
               .font(.system(size: 10))
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(.secondary)
+              .accessibilityHidden(true)
             Text(item.serviceCodePrefix ?? "-")
               .font(.system(.subheadline, design: .rounded, weight: .semibold))
           }
+          .accessibilityElement(children: .combine)
+          .accessibilityLabel("サービスコード")
 
-          HStack(spacing: 6) {
+          HStack(spacing: AppSpacing.xs + 2) {
             Image(systemName: "doc.text.fill")
               .font(.system(size: 10))
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(.secondary)
+              .accessibilityHidden(true)
             Text(item.planCode ?? "-")
               .font(.system(.caption, design: .rounded))
               .foregroundStyle(.secondary)
           }
+          .accessibilityElement(children: .combine)
+          .accessibilityLabel("プランコード")
 
           if let simList = item.simInfoList {
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.sm) {
               ForEach(simList) { sim in
-                HStack(spacing: 4) {
+                let isActive = sim.status == "O"
+                HStack(spacing: AppSpacing.xs) {
                   Image(
-                    systemName: sim.status == "O"
-                      ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
+                    systemName: isActive ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
                   )
                   .font(.system(size: 12))
                   Text(sim.simType ?? "?")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                 }
-                .foregroundStyle(sim.status == "O" ? .green : .orange)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .foregroundStyle(isActive ? Color.green : Color.orange)
+                .padding(.horizontal, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.xs)
                 .background(
                   Capsule()
-                    .fill((sim.status == "O" ? Color.green : Color.orange).opacity(0.12))
+                    .fill((isActive ? Color.green : Color.orange).opacity(0.12))
                 )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(sim.simType ?? "SIM")
+                .accessibilityValue(isActive ? "利用中" : "要確認")
               }
             }
           }
         }
-        .padding(12)
+        .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-          RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
-              RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-            }
-        }
+        .cardSurface(
+          cornerRadius: AppRadius.sm,
+          material: .ultraThinMaterial,
+          elevation: .flat
+        )
       }
     }
   }

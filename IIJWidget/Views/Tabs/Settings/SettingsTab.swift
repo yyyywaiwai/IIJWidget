@@ -18,74 +18,68 @@ struct SettingsTab: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker("データ取得方式", selection: Binding(
-                        get: { viewModel.communicationMethod },
-                        set: viewModel.updateCommunicationMethod
-                    )) {
-                        ForEach(CommunicationMethod.allCases) { method in
-                            Text(method.displayName)
-                                .tag(method)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                } header: {
-                    Text("通信方式")
-                } footer: {
-                    Text("\(viewModel.communicationMethod.explanation) 次回のデータ更新から反映され、別方式への自動切替は行いません。")
-                }
-
-                Section(header: HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("使いすぎアラート")
-                    InfoTipButton(
-                        message: usageAlertHintText,
-                        accessibilityLabel: "使いすぎアラートのヒント"
-                    )
-                    Spacer(minLength: 0)
-                }) {
-                    Toggle(isOn: Binding(
-                        get: { viewModel.usageAlertSettings.isEnabled },
-                        set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(isEnabled: $0)) }
-                    )) {
-                        Text("使いすぎアラートを有効にする")
-                            .foregroundStyle(accentColor)
-                    }
-                    .tint(accentColor)
-
-                    if viewModel.usageAlertSettings.isEnabled {
-                        HStack {
-                            Text("今月に")
-                                .foregroundStyle(accentColor)
-                            TextField("1000", value: Binding(
-                                get: { viewModel.usageAlertSettings.monthlyThresholdMB },
-                                set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(monthlyThresholdMB: $0)) }
-                            ), format: .number)
-                            .keyboardType(.numberPad)
-                            .focused($usageAlertFocusedField, equals: .monthly)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 100)
-                            Text("MBを超えた時警告")
-                                .foregroundStyle(accentColor)
-                        }
-
-                        HStack {
-                            Text("当日に")
-                                .foregroundStyle(accentColor)
-                            TextField("100", value: Binding(
-                                get: { viewModel.usageAlertSettings.dailyThresholdMB },
-                                set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(dailyThresholdMB: $0)) }
-                            ), format: .number)
-                            .keyboardType(.numberPad)
-                            .focused($usageAlertFocusedField, equals: .daily)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 100)
-                            Text("MBを超えた時警告")
-                                .foregroundStyle(accentColor)
-                        }
+        Form {
+            Section {
+                Picker("データ取得方式", selection: Binding(
+                    get: { viewModel.communicationMethod },
+                    set: viewModel.updateCommunicationMethod
+                )) {
+                    ForEach(CommunicationMethod.allCases) { method in
+                        Text(method.displayName)
+                            .tag(method)
                     }
                 }
+                .pickerStyle(.inline)
+            } header: {
+                Text("通信方式")
+            } footer: {
+                Text("\(viewModel.communicationMethod.explanation) 次回のデータ更新から反映され、別方式への自動切替は行いません。")
+            }
+
+            Section(header: HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("使いすぎアラート")
+                InfoTipButton(
+                    message: usageAlertHintText,
+                    accessibilityLabel: "使いすぎアラートのヒント"
+                )
+                Spacer(minLength: 0)
+            }) {
+                Toggle(isOn: Binding(
+                    get: { viewModel.usageAlertSettings.isEnabled },
+                    set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(isEnabled: $0)) }
+                )) {
+                    Text("使いすぎアラートを有効にする")
+                }
+                .tint(accentColor)
+
+                if viewModel.usageAlertSettings.isEnabled {
+                    HStack {
+                        Text("今月に")
+                        TextField("1000", value: Binding(
+                            get: { viewModel.usageAlertSettings.monthlyThresholdMB },
+                            set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(monthlyThresholdMB: $0)) }
+                        ), format: .number)
+                        .keyboardType(.numberPad)
+                        .focused($usageAlertFocusedField, equals: .monthly)
+                        .multilineTextAlignment(.trailing)
+                        .frame(minWidth: 72)
+                        Text("MBを超えた時警告")
+                    }
+
+                    HStack {
+                        Text("当日に")
+                        TextField("100", value: Binding(
+                            get: { viewModel.usageAlertSettings.dailyThresholdMB },
+                            set: { viewModel.updateUsageAlertSettings(viewModel.usageAlertSettings.updating(dailyThresholdMB: $0)) }
+                        ), format: .number)
+                        .keyboardType(.numberPad)
+                        .focused($usageAlertFocusedField, equals: .daily)
+                        .multilineTextAlignment(.trailing)
+                        .frame(minWidth: 72)
+                        Text("MBを超えた時警告")
+                    }
+                }
+            }
 
                 Section(header: Text("表示")) {
                     AccentPalettePickerRow(
@@ -121,7 +115,6 @@ struct SettingsTab: View {
                         set: { viewModel.updateShowsLowSpeedUsage($0) }
                     )) {
                         Text("低速通信の通信量を表示")
-                            .foregroundStyle(accentColor)
                     }
                     .toggleStyle(.switch)
                     .tint(accentColor)
@@ -131,7 +124,6 @@ struct SettingsTab: View {
                         set: { viewModel.updateShowsBillingChart($0) }
                     )) {
                         Text("請求タブのグラフを表示")
-                            .foregroundStyle(accentColor)
                     }
                     .toggleStyle(.switch)
                     .tint(accentColor)
@@ -142,7 +134,6 @@ struct SettingsTab: View {
                     )) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("当日利用量をデータ残量から計算する")
-                                .foregroundStyle(accentColor)
                             InfoTipButton(
                                 message: calculateTodayHintText,
                                 accessibilityLabel: "当日利用量計算のヒント"
@@ -157,7 +148,6 @@ struct SettingsTab: View {
                         set: { viewModel.updateHidePhoneOnScreenshot($0) }
                     )) {
                         Text("スクショ時に電話番号を隠す")
-                            .foregroundStyle(accentColor)
                     }
                     .toggleStyle(.switch)
                     .tint(accentColor)
@@ -196,51 +186,44 @@ struct SettingsTab: View {
                     Text("ログアウトするとキーチェーンの資格情報が削除され、次回起動時に再設定が必要です。")
                         .font(.footnote)
                 }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
+        .alert(
+            "保存済みの資格情報を削除してログアウトしますか?",
+            isPresented: $showLogoutConfirmation
+        ) {
+            Button("ログアウト", role: .destructive) {
+                performLogout()
             }
-            .navigationTitle("設定")
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemGroupedBackground))
-            .alert(
-                "保存済みの資格情報を削除してログアウトしますか?",
-                isPresented: $showLogoutConfirmation
-            ) {
-                Button("ログアウト", role: .destructive) {
-                    performLogout()
-                }
-                Button("キャンセル", role: .cancel) {}
-            }
-            .alert(
-                "ログアウトに失敗しました",
-                isPresented: Binding(
-                    get: { logoutErrorMessage != nil },
-                    set: { newValue in
-                        if !newValue {
-                            logoutErrorMessage = nil
-                        }
+            Button("キャンセル", role: .cancel) {}
+        }
+        .alert(
+            "ログアウトに失敗しました",
+            isPresented: Binding(
+                get: { logoutErrorMessage != nil },
+                set: { newValue in
+                    if !newValue {
+                        logoutErrorMessage = nil
                     }
-                )
-            ) {
-                Button("OK", role: .cancel) {
-                    logoutErrorMessage = nil
                 }
-            } message: {
-                if let logoutErrorMessage {
-                    Text(logoutErrorMessage)
-                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                logoutErrorMessage = nil
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+        } message: {
+            if let logoutErrorMessage {
+                Text(logoutErrorMessage)
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
                 if usageAlertFocusedField != nil {
-                    HStack {
-                        Spacer()
-                        Button("完了") {
-                            usageAlertFocusedField = nil
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(accentColor)
+                    Spacer()
+                    Button("完了") {
+                        usageAlertFocusedField = nil
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color.clear)
                 }
             }
         }

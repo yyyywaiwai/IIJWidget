@@ -6,6 +6,7 @@ struct BillingTabView: View {
   let bill: BillSummaryResponse?
   let accentColors: AccentColorSettings
   let showsBillingChart: Bool
+  let refresh: () async -> Void
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @State private var presentedEntry: BillSummaryResponse.BillEntry?
 
@@ -17,12 +18,12 @@ struct BillingTabView: View {
       let useTwoColumn = isRegularWidth && isLandscape
 
       ScrollView {
-        VStack(spacing: 20) {
+        VStack(spacing: AppSpacing.xl) {
           if let bill {
             if useTwoColumn {
-              HStack(alignment: .top, spacing: 20) {
-                VStack(spacing: 20) {
-                  BillingHighlightCard(bill: bill) { entry in
+              HStack(alignment: .top, spacing: AppSpacing.xl) {
+                VStack(spacing: AppSpacing.xl) {
+                  BillingHighlightCard(bill: bill, accentColors: accentColors) { entry in
                     presentedEntry = entry
                   }
                   if showsBillingChart {
@@ -31,44 +32,50 @@ struct BillingTabView: View {
                 }
                 .frame(maxWidth: .infinity)
 
-                BillSummaryList(bill: bill) { entry in
+                BillSummaryList(bill: bill, accentColors: accentColors) { entry in
                   presentedEntry = entry
                 }
-                .padding()
-                .background {
-                  let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-                  shape.fill(.thinMaterial)
-                }
+                .padding(AppSpacing.lg)
+                .cardSurface(cornerRadius: AppRadius.lg)
                 .frame(maxWidth: 400)
               }
             } else {
-              BillingHighlightCard(bill: bill) { entry in
+              BillingHighlightCard(bill: bill, accentColors: accentColors) { entry in
                 presentedEntry = entry
               }
               if showsBillingChart {
                 BillingBarChart(bill: bill, accentColors: accentColors)
               }
-              BillSummaryList(bill: bill) { entry in
+              BillSummaryList(bill: bill, accentColors: accentColors) { entry in
                 presentedEntry = entry
               }
-              .padding()
-              .background {
-                let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-                shape.fill(.thinMaterial)
-              }
+              .padding(AppSpacing.lg)
+              .cardSurface(cornerRadius: AppRadius.lg)
             }
           } else {
-            EmptyStateView(text: "請求データがまだ取得されていません。")
+            EmptyStateView(
+              title: "請求データがありません",
+              message: "請求データがまだ取得されていません。下に引っ張るか、「最新取得」をタップしてください。",
+              systemImage: "yensign.circle"
+            ) {
+              Button("最新取得") {
+                Task { await refresh() }
+              }
+              .buttonStyle(.borderedProminent)
+            }
           }
         }
-        .padding()
+        .padding(AppSpacing.lg)
       }
+      .refreshable { await refresh() }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color(.systemGroupedBackground))
     }
     .sheet(item: $presentedEntry) { entry in
       if let bill {
         BillDetailSheet(viewModel: viewModel, bill: bill, initialEntry: entry)
+          .presentationDetents([.large, .medium])
+          .presentationDragIndicator(.visible)
       } else {
         EmptyView()
       }
@@ -78,11 +85,21 @@ struct BillingTabView: View {
 
 struct BillingHighlightCard: View {
   let bill: BillSummaryResponse
+  let accentColors: AccentColorSettings
   let onSelect: ((BillSummaryResponse.BillEntry) -> Void)?
 
-  init(bill: BillSummaryResponse, onSelect: ((BillSummaryResponse.BillEntry) -> Void)? = nil) {
+  init(
+    bill: BillSummaryResponse,
+    accentColors: AccentColorSettings,
+    onSelect: ((BillSummaryResponse.BillEntry) -> Void)? = nil
+  ) {
     self.bill = bill
+    self.accentColors = accentColors
     self.onSelect = onSelect
+  }
+
+  private var accentColor: Color {
+    accentColors.palette(for: .billingChart).previewSymbolColor
   }
 
   var body: some View {
@@ -94,6 +111,7 @@ struct BillingHighlightCard: View {
           highlightCard(for: latest, isInteractive: true)
         }
         .buttonStyle(.plain)
+        .accessibilityHint("タップすると請求明細を開きます")
       } else {
         highlightCard(for: latest, isInteractive: false)
       }
@@ -108,46 +126,53 @@ struct BillingHighlightCard: View {
   private func highlightCard(for latest: BillSummaryResponse.BillEntry, isInteractive: Bool)
     -> some View
   {
+    let isUnpaid = latest.isUnpaid == true
     DashboardCard(
       title: "最新のご請求",
-      subtitle: latest.isUnpaid == true ? "未払いのご請求があります" : "\(latest.formattedMonth)分のご請求はこちらです"
+      subtitle: isUnpaid ? "未払いのご請求があります" : "\(latest.formattedMonth)分のご請求はこちらです"
     ) {
       HStack(alignment: .bottom) {
-        VStack(alignment: .leading, spacing: 4) {
-          HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(latest.formattedAmount)
-              .font(.system(size: 40, weight: .bold, design: .rounded))
-              .foregroundStyle(latest.isUnpaid == true ? .red : .primary)
-              .monospacedDigit()
-          }
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+          Text(latest.formattedAmount)
+            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+            .foregroundStyle(isUnpaid ? Color.red : Color.primary)
+            .monospacedDigit()
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(latest.formattedMonth)分のご請求")
+        .accessibilityValue(isUnpaid ? "\(latest.formattedAmount)、未払い" : latest.formattedAmount)
 
-        Spacer()
+        Spacer(minLength: AppSpacing.md)
 
-        VStack(alignment: .trailing, spacing: 8) {
-          if latest.isUnpaid == true {
+        VStack(alignment: .trailing, spacing: AppSpacing.sm) {
+          if isUnpaid {
             Label("未払い", systemImage: "exclamationmark.circle.fill")
               .font(.system(.caption, design: .rounded, weight: .bold))
               .foregroundStyle(.red)
-              .padding(.horizontal, 10)
-              .padding(.vertical, 4)
+              .padding(.horizontal, AppSpacing.sm + 2)
+              .padding(.vertical, AppSpacing.xs)
               .background(Color.red.opacity(0.1), in: Capsule())
+              .accessibilityHidden(true)
           } else {
             Image(systemName: "creditcard.fill")
               .font(.system(size: 24))
-              .foregroundStyle(.cyan.gradient)
-              .padding(10)
-              .background(Color.cyan.opacity(0.1), in: Circle())
+              .foregroundStyle(accentColor.gradient)
+              .padding(AppSpacing.sm + 2)
+              .background(accentColor.opacity(0.1), in: Circle())
+              .accessibilityHidden(true)
           }
 
           if isInteractive {
-            HStack(spacing: 4) {
+            HStack(spacing: AppSpacing.xs) {
               Text("詳細を見る")
                 .font(.system(.caption2, design: .rounded, weight: .bold))
               Image(systemName: "chevron.right")
                 .font(.system(.caption2, weight: .heavy))
             }
-            .foregroundStyle(.cyan)
+            .foregroundStyle(accentColor)
+            .accessibilityHidden(true)
           }
         }
       }
@@ -193,10 +218,24 @@ struct BillingBarChart: View {
           )
           .foregroundStyle(entry.point.isUnpaid ? unpaidGradient : paidGradient)
           .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+          .accessibilityLabel(billingAxisLabel(for: entry.point))
+          .accessibilityValue(
+            entry.point.isUnpaid
+              ? "\(currencyText(entry.point.value))、未払い" : currencyText(entry.point.value)
+          )
           .annotation(position: .top) {
-            Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
-              .font(.caption2)
-              .foregroundStyle(.secondary)
+            HStack(spacing: 2) {
+              // 未払いは色に加えて記号でも示す。
+              if entry.point.isUnpaid {
+                Image(systemName: "exclamationmark.circle.fill")
+                  .font(.system(size: 8))
+                  .foregroundStyle(.red)
+              }
+              Text(entry.point.value, format: .currency(code: "JPY").precision(.fractionLength(0)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            .accessibilityHidden(true)
           }
         }
         .chartXAxis {
@@ -227,14 +266,14 @@ struct BillingBarChart: View {
               .onAppear {
                 cardWidth = proxy.size.width
               }
-              .onChange(of: proxy.size) { newSize in
+              .onChange(of: proxy.size) { _, newSize in
                 cardWidth = newSize.width
               }
           }
         }
         .frame(height: 260)
         .onAppear { triggerBarAnimation() }
-        .onChange(of: animationToken) { _ in triggerBarAnimation() }
+        .onChange(of: animationToken) { _, _ in triggerBarAnimation() }
         .onDisappear { animateBars = false }
       }
     }
@@ -269,6 +308,10 @@ struct BillingBarChart: View {
     Double(index)
   }
 
+  private func currencyText(_ value: Double) -> String {
+    value.formatted(.currency(code: "JPY").precision(.fractionLength(0)))
+  }
+
   private var axisLabelPadding: CGFloat { 18 }
 
   private func index(from value: Double) -> Int? {
@@ -287,7 +330,8 @@ struct BillingBarChart: View {
 
   private func triggerBarAnimation() {
     animateBars = false
-    DispatchQueue.main.async {
+    Task { @MainActor in
+      await Task.yield()
       withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.15)) {
         animateBars = true
       }
@@ -298,20 +342,27 @@ struct BillingBarChart: View {
 
 struct BillSummaryList: View {
   let bill: BillSummaryResponse
+  let accentColors: AccentColorSettings
   let onSelect: ((BillSummaryResponse.BillEntry) -> Void)?
   private var entries: [BillSummaryResponse.BillEntry] {
     Array(bill.billList.prefix(12))
   }
 
-  init(bill: BillSummaryResponse, onSelect: ((BillSummaryResponse.BillEntry) -> Void)? = nil) {
+  init(
+    bill: BillSummaryResponse,
+    accentColors: AccentColorSettings,
+    onSelect: ((BillSummaryResponse.BillEntry) -> Void)? = nil
+  ) {
     self.bill = bill
+    self.accentColors = accentColors
     self.onSelect = onSelect
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
       Text("直近の請求金額")
-        .font(.headline)
+        .font(.system(.headline, design: .rounded, weight: .bold))
+        .accessibilityAddTraits(.isHeader)
 
       ForEach(entries) { entry in
         row(for: entry)
@@ -332,6 +383,7 @@ struct BillSummaryList: View {
         rowContent(for: entry, isInteractive: true)
       }
       .buttonStyle(.plain)
+      .accessibilityHint("タップすると明細を開きます")
     } else {
       rowContent(for: entry, isInteractive: false)
     }
@@ -341,20 +393,23 @@ struct BillSummaryList: View {
   private func rowContent(for entry: BillSummaryResponse.BillEntry, isInteractive: Bool)
     -> some View
   {
-    HStack(spacing: 12) {
-      let statusColor: Color = entry.isUnpaid == true ? .red : .blue
+    let isUnpaid = entry.isUnpaid == true
+    HStack(spacing: AppSpacing.md) {
+      let statusColor: Color =
+        isUnpaid ? .red : accentColors.palette(for: .billingChart).previewSymbolColor
 
-      Image(systemName: entry.isUnpaid == true ? "exclamationmark.circle.fill" : "doc.text.fill")
+      Image(systemName: isUnpaid ? "exclamationmark.circle.fill" : "doc.text.fill")
         .font(.system(size: 18, weight: .bold))
         .foregroundStyle(statusColor)
         .frame(width: 28, height: 28)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(entry.formattedMonth)
           .font(.system(.subheadline, design: .rounded, weight: .bold))
           .foregroundStyle(.primary)
 
-        if entry.isUnpaid == true {
+        if isUnpaid {
           Text("未払い")
             .font(.system(.caption2, design: .rounded, weight: .bold))
             .foregroundStyle(.red)
@@ -365,21 +420,26 @@ struct BillSummaryList: View {
         }
       }
 
-      Spacer()
+      Spacer(minLength: AppSpacing.sm)
 
       Text(entry.formattedAmount)
         .font(.system(.body, design: .rounded, weight: .bold))
         .monospacedDigit()
-        .foregroundStyle(entry.isUnpaid == true ? .red : .primary)
+        .foregroundStyle(isUnpaid ? Color.red : Color.primary)
 
       if isInteractive {
         Image(systemName: "chevron.right")
           .font(.system(.caption2, weight: .bold))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
       }
     }
     .contentShape(Rectangle())
-    .padding(.vertical, 8)
+    .padding(.vertical, AppSpacing.sm)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(entry.formattedMonth)
+    .accessibilityValue(
+      isUnpaid ? "\(entry.formattedAmount)、未払い" : "\(entry.formattedAmount)、お支払い完了")
   }
 }
 
@@ -455,25 +515,33 @@ struct BillDetailSheet: View {
   private var detailContent: some View {
     switch loadState {
     case .loading:
-      ProgressView("読み込み中…")
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      // 単なるスピナーではなく最終的なレイアウトを模したスケルトンを出し、
+      // 読み込み完了時のガタつきを抑える。
+      ScrollView {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+          BillDetailSkeletonCard(lineWidths: [0.35, 0.6])
+          BillDetailSkeletonCard(lineWidths: [0.3, 0.9, 0.75])
+          BillDetailSkeletonCard(lineWidths: [0.3, 0.85, 0.7, 0.8])
+        }
+        .padding()
+      }
+      .disabled(true)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("請求明細を読み込み中")
     case .failed(let message):
-      VStack(spacing: 16) {
-        Text("請求明細を取得できませんでした")
-          .font(.headline)
+      ContentUnavailableView {
+        Label("請求明細を取得できませんでした", systemImage: "exclamationmark.triangle")
+      } description: {
         Text(message)
-          .font(.subheadline)
-          .multilineTextAlignment(.center)
+      } actions: {
         Button("再読み込み") {
           Task { await loadDetail(for: selectedEntry) }
         }
         .buttonStyle(.borderedProminent)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .padding()
     case .loaded(let detail):
       ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
           BillDetailSummaryView(detail: detail)
           if !detail.taxBreakdowns.isEmpty {
             BillTaxBreakdownView(breakdowns: detail.taxBreakdowns)
@@ -502,7 +570,41 @@ struct BillDetailSheet: View {
       loadState = .loaded(detail)
     } catch {
       guard targetId == selectedEntry.id else { return }
+      // シートを閉じたり別の月へ切り替えると .task がキャンセルされる。
+      // これは失敗ではないのでエラー表示せずそのまま抜ける。
+      guard !TaskCancellation.isCancellation(error) else { return }
       loadState = .failed(error.localizedDescription)
+    }
+  }
+}
+
+/// 明細読み込み中に表示するプレースホルダーカード。
+private struct BillDetailSkeletonCard: View {
+  /// 各行の幅を親に対する比率で指定する。
+  let lineWidths: [CGFloat]
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var isPulsing = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
+      ForEach(Array(lineWidths.enumerated()), id: \.offset) { _, ratio in
+        GeometryReader { proxy in
+          Capsule()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: proxy.size.width * ratio, height: 14)
+        }
+        .frame(height: 14)
+      }
+    }
+    .padding()
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(cornerRadius: AppRadius.md, elevation: .flat)
+    .opacity(isPulsing ? 0.55 : 1)
+    .onAppear {
+      guard !reduceMotion else { return }
+      withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+        isPulsing = true
+      }
     }
   }
 }
@@ -511,25 +613,22 @@ struct BillDetailSummaryView: View {
   let detail: BillDetailResponse
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text(detail.monthText)
-        .font(.headline)
+        .font(.system(.headline, design: .rounded, weight: .bold))
       Text(detail.totalAmountText)
-        .font(.system(size: 34, weight: .bold, design: .rounded))
+        .font(.system(.largeTitle, design: .rounded, weight: .bold))
         .foregroundStyle(.primary)
         .monospacedDigit()
+        .minimumScaleFactor(0.6)
+        .lineLimit(1)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding()
-    .background {
-      if #available(iOS 26.0, *) {
-        Color.clear
-          .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-      } else {
-        Color.blue.opacity(0.08)
-          .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      }
-    }
+    .cardSurface(cornerRadius: AppRadius.md)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(detail.monthText)の合計")
+    .accessibilityValue(detail.totalAmountText)
   }
 }
 
@@ -537,9 +636,10 @@ struct BillTaxBreakdownView: View {
   let breakdowns: [BillDetailResponse.TaxBreakdown]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text("税区分")
-        .font(.headline)
+        .font(.system(.headline, design: .rounded, weight: .bold))
+        .accessibilityAddTraits(.isHeader)
       ForEach(breakdowns) { entry in
         HStack {
           VStack(alignment: .leading) {
@@ -550,27 +650,28 @@ struct BillTaxBreakdownView: View {
                 .foregroundStyle(.secondary)
             }
           }
-          Spacer()
+          Spacer(minLength: AppSpacing.sm)
           VStack(alignment: .trailing) {
             Text(entry.amountText)
               .bold()
+              .monospacedDigit()
             if let taxAmount = entry.taxAmountText {
               Text(taxAmount)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
             }
           }
         }
+        .accessibilityElement(children: .combine)
         if entry.id != breakdowns.last?.id {
           Divider()
         }
       }
     }
     .padding()
-    .background {
-      Color(.secondarySystemBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(cornerRadius: AppRadius.md, material: .ultraThinMaterial, elevation: .flat)
   }
 }
 
@@ -578,9 +679,10 @@ struct BillDetailSectionView: View {
   let section: BillDetailResponse.Section
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
       Text(section.title)
-        .font(.headline)
+        .font(.system(.headline, design: .rounded, weight: .bold))
+        .accessibilityAddTraits(.isHeader)
       ForEach(section.items) { item in
         BillDetailItemRow(item: item)
         if item.id != section.items.last?.id {
@@ -592,19 +694,17 @@ struct BillDetailSectionView: View {
           Text("小計")
             .font(.subheadline)
             .foregroundStyle(.secondary)
-          Spacer()
+          Spacer(minLength: AppSpacing.sm)
           Text(subtotal)
-            .font(.headline)
+            .font(.system(.headline, design: .rounded, weight: .bold))
             .monospacedDigit()
         }
+        .accessibilityElement(children: .combine)
       }
     }
     .padding()
-    .background {
-      Color(.systemBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(cornerRadius: AppRadius.md, material: .regularMaterial)
   }
 }
 
@@ -612,8 +712,8 @@ struct BillDetailItemRow: View {
   let item: BillDetailResponse.Item
 
   var body: some View {
-    HStack(alignment: .top) {
-      VStack(alignment: .leading, spacing: 4) {
+    HStack(alignment: .top, spacing: AppSpacing.md) {
+      VStack(alignment: .leading, spacing: AppSpacing.xs) {
         Text(item.title)
           .font(.subheadline.weight(.semibold))
         if let detail = item.detail {
@@ -622,17 +722,19 @@ struct BillDetailItemRow: View {
             .foregroundStyle(.secondary)
         }
       }
-      Spacer()
-      VStack(alignment: .trailing, spacing: 4) {
+      Spacer(minLength: AppSpacing.sm)
+      VStack(alignment: .trailing, spacing: AppSpacing.xs) {
         if let quantity = item.quantityText {
           Text("数量 \(quantity)")
             .font(.caption)
             .foregroundStyle(.secondary)
+            .monospacedDigit()
         }
         if let unit = item.unitPriceText {
           Text("単価 \(unit)")
             .font(.caption)
             .foregroundStyle(.secondary)
+            .monospacedDigit()
         }
         if let amount = item.amountText {
           Text(amount)
@@ -641,5 +743,6 @@ struct BillDetailItemRow: View {
         }
       }
     }
+    .accessibilityElement(children: .combine)
   }
 }

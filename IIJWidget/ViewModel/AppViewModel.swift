@@ -37,7 +37,11 @@ final class AppViewModel: ObservableObject {
     private let communicationMethodStore = CommunicationMethodStore()
     private let refreshLogStore = RefreshLogStore()
 
-    private var refreshTaskInFlight = false
+    /// 実行中の更新タスク。SwiftUI の `.refreshable` は自身の Task を
+    /// キャンセルすることがあり、構造化された子タスクのまま通信すると
+    /// URLSession まで伝播して -999 (キャンセルしました) になる。
+    /// ViewModel 側で非構造化 Task として保持し、呼び出し元は完了を待つだけにする。
+    private var inFlightRefresh: (trigger: RefreshTrigger, task: Task<Result<Void, Error>, Never>)?
     private var lastAutomaticRefresh: Date?
 
     init() {
@@ -188,19 +192,32 @@ final class AppViewModel: ObservableObject {
         widgetRefreshService.clearSessionArtifacts()
     }
 
+    /// 更新の入口。既に実行中なら二重に走らせず、その完了を待って同じ結果を返す。
+    /// 実際の通信は `inFlightRefresh` の中 (非構造化 Task) で行うので、
+    /// 呼び出し元 (引っ張って更新) がキャンセルされても取得処理は最後まで走り切る。
     @discardableResult
     func refresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
-        guard !refreshTaskInFlight else {
-            return .failure(NSError(
-                domain: "AppViewModel",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "前回の更新が進行中です。完了するまでお待ちください。"]
-            ))
+        if let inFlight = inFlightRefresh {
+            let result = await inFlight.task.value
+            // 自動更新に相乗りしただけでは ForceUpdate ヘッダが付かず、
+            // 引っ張って更新なのにサーバのキャッシュが返りうる。
+            // 手動更新は自動更新の完了を待ってから改めて自前で走らせる。
+            guard trigger == .manual, inFlight.trigger == .automatic else { return result }
+            guard inFlightRefresh == nil else { return result }
         }
-        refreshTaskInFlight = true
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return Result<Void, Error>.failure(CancellationError()) }
+            defer { self.inFlightRefresh = nil }
+            return await self.performRefresh(trigger: trigger)
+        }
+        inFlightRefresh = (trigger, task)
+        return await task.value
+    }
+
+    private func performRefresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
         let previousPayload = currentPayload()
         state = .loading(previous: previousPayload)
-        defer { refreshTaskInFlight = false }
 
         let manualCredentials = currentManualCredentials()
         let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
@@ -226,6 +243,12 @@ final class AppViewModel: ObservableObject {
             )
             return .success(())
         } catch {
+            // キャンセルはユーザーに見せるべき失敗ではないので、
+            // バナーもログも出さずに直前の状態へ戻す。
+            if TaskCancellation.isCancellation(error) {
+                state = previousPayload.map { LoadState.loaded($0) } ?? .idle
+                return .failure(error)
+            }
             state = .failed(error.localizedDescription, lastPayload: previousPayload)
             refreshLogStore.append(
                 trigger: trigger.logTrigger,

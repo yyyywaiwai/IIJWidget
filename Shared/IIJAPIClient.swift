@@ -28,6 +28,22 @@ enum DailyFetchMode {
     case tableOnly
 }
 
+/// キャンセル起因のエラー判定。`CancellationError` と URLSession の -999 を、
+/// ラップされている場合も含めて見分ける。アプリ側とウィジェット側で共用する。
+enum TaskCancellation {
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        var current: NSError? = error as NSError
+        while let nsError = current {
+            if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+                return true
+            }
+            current = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+}
+
 struct APIErrorEnvelope: Decodable {
     let error: String?
 }
@@ -505,13 +521,38 @@ final class IIJAPIClient {
         async let status = fetchServiceStatus()
         async let usage = fetchMonthlyUsage()
         async let daily = fetchDailyUsage(dailyFetchMode: dailyFetchMode)
+
+        // 1つが失敗すると兄弟もキャンセルされるため、await の順によっては本来の
+        // 失敗理由ではなくキャンセル (-999) が外へ出てしまう。全件の結果を受け取り、
+        // キャンセル以外の最初のエラーを優先して投げ直す。
+        var failures: [Error] = []
+        var topValue: MemberTopResponse?
+        var billValue: BillSummaryResponse?
+        var statusValue: ServiceStatusResponse?
+        var usageValue: [MonthlyUsageService]?
+        var dailyValue: [DailyUsageService]?
+
+        do { topValue = try await top } catch { failures.append(error) }
+        do { billValue = try await bill } catch { failures.append(error) }
+        do { statusValue = try await status } catch { failures.append(error) }
+        do { usageValue = try await usage } catch { failures.append(error) }
+        do { dailyValue = try await daily } catch { failures.append(error) }
+
+        if let primary = failures.first(where: { !TaskCancellation.isCancellation($0) }) ?? failures.first {
+            throw primary
+        }
+
+        guard let topValue, let billValue, let statusValue, let usageValue, let dailyValue else {
+            throw IIJAPIClientError.invalidResponse
+        }
+
         return AggregatePayload(
             fetchedAt: Date(),
-            top: try await top,
-            bill: try await bill,
-            serviceStatus: try await status,
-            monthlyUsage: try await usage,
-            dailyUsage: try await daily
+            top: topValue,
+            bill: billValue,
+            serviceStatus: statusValue,
+            monthlyUsage: usageValue,
+            dailyUsage: dailyValue
         )
     }
 
