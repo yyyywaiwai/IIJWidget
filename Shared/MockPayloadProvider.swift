@@ -20,17 +20,7 @@ enum MockPayloadProvider {
 
         return AggregatePayload(
             fetchedAt: Date(),
-            top: MemberTopResponse(
-                serviceInfoList: services,
-                billSummary: MemberTopResponse.BillSummary(
-                    amount: nil,
-                    miowari: nil,
-                    month: nil
-                ),
-                hasVouchers: false,
-                usagePeriod: "10ヵ月",
-                prefixList: ["hdc", "hdu"]
-            ),
+            top: TrafficSummary(serviceInfoList: services),
             bill: bill,
             serviceStatus: status,
             monthlyUsage: monthly,
@@ -40,43 +30,16 @@ enum MockPayloadProvider {
 
     // MARK: - Private helpers
 
-    private static func sampleServices() -> [MemberTopResponse.ServiceInfo] {
+    private static func sampleServices() -> [TrafficSummary.ServiceInfo] {
         [
-            MemberTopResponse.ServiceInfo(
-                dataShareNotCovered: false,
+            TrafficSummary.ServiceInfo(
+                id: "hdu92847356",
                 serviceCode: "hdc92847349",
+                groupServiceCode: nil,
                 totalCapacity: 10,
-                dataShareExistence: false,
+                remainingDataGB: 1.8,
                 planName: "ギガプラン",
-                chargePlan: "10",
-                serviceName: "音声SIM",
-                phoneNo: "070-5283-7491",
-                couponData: [
-                    MemberTopResponse.ServiceInfo.CouponEntry(
-                        adjustmentCoupon: false,
-                        sequenceNo: 0,
-                        month: "202512",
-                        couponValue: 0
-                    ),
-                    MemberTopResponse.ServiceInfo.CouponEntry(
-                        adjustmentCoupon: nil,
-                        sequenceNo: 1,
-                        month: "202601",
-                        couponValue: 1.8
-                    ),
-                    MemberTopResponse.ServiceInfo.CouponEntry(
-                        adjustmentCoupon: nil,
-                        sequenceNo: 2,
-                        month: "202602",
-                        couponValue: 0
-                    ),
-                    MemberTopResponse.ServiceInfo.CouponEntry(
-                        adjustmentCoupon: nil,
-                        sequenceNo: 3,
-                        month: "202603",
-                        couponValue: 0
-                    )
-                ]
+                phoneNo: "070-5283-7491"
             )
         ]
     }
@@ -85,71 +48,60 @@ enum MockPayloadProvider {
         BillSummaryResponse(
             billList: [
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["111015580113"],
+                    billingNumber: "111015580113",
                     month: "202511",
                     totalAmount: 1404,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["111005999429"],
+                    billingNumber: "111005999429",
                     month: "202510",
                     totalAmount: 1404,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110996481070"],
+                    billingNumber: "110996481070",
                     month: "202509",
                     totalAmount: 904,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110987036127"],
+                    billingNumber: "110987036127",
                     month: "202508",
                     totalAmount: 904,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110977637436"],
+                    billingNumber: "110977637436",
                     month: "202507",
                     totalAmount: 904,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110968293003"],
+                    billingNumber: "110968293003",
                     month: "202506",
                     totalAmount: 903,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110959041819"],
+                    billingNumber: "110959041819",
                     month: "202505",
                     totalAmount: 903,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110949886453"],
+                    billingNumber: "110949886453",
                     month: "202504",
                     totalAmount: 1349,
-                    usedPoint: 0,
                     isUnpaid: false
                 ),
                 BillSummaryResponse.BillEntry(
-                    billNoList: ["110939799284", "110940851950"],
+                    billingNumber: "110939799284",
                     month: "202503",
                     totalAmount: 4353,
-                    usedPoint: 0,
                     isUnpaid: false
                 )
-            ],
-            isVoiceSim: true,
-            isImt: false
+            ]
         )
     }
 
@@ -157,20 +109,18 @@ enum MockPayloadProvider {
         ServiceStatusResponse(
             serviceInfoList: [
                 ServiceStatusResponse.ServiceStatus(
+                    id: "hdu92847356",
                     simInfoList: [
                         ServiceStatusResponse.ServiceStatus.SimInfo(
-                            simType: "2",
-                            status: "O"
+                            simType: "SIM",
+                            status: "利用中"
                         )
                     ],
                     serviceCodePrefix: "hdc",
-                    stopDate: "",
                     planCode: "CN1000",
-                    isBic: false,
-                    status: "O"
+                    status: "利用中"
                 )
-            ],
-            jmbNumberChangePossible: false
+            ]
         )
     }
 
@@ -264,7 +214,7 @@ enum MockPayloadProvider {
 
         return [
             MonthlyUsageService(
-                hdoCode: "hdu92847356",
+                lineID: "hdu92847356",
                 titlePrimary: "070-5283-7491",
                 titleDetail: "（音声・タイプA） / hdc92847349 （ / 10ギガプラン） / 8981300012345678901",
                 entries: entries
@@ -309,7 +259,7 @@ enum MockPayloadProvider {
 
         return [
             DailyUsageService(
-                hdoCode: "hdu92847356",
+                lineID: "hdu92847356",
                 titlePrimary: "070-5283-7491",
                 titleDetail: "（音声・タイプA） / hdc92847349（10ギガプラン）8981300012345678901",
                 entries: entries

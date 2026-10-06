@@ -15,6 +15,7 @@ final class AppViewModel: ObservableObject {
     enum RefreshTrigger {
         case automatic
         case manual
+        case usageTab
     }
 
     @Published var mioId: String = ""
@@ -26,7 +27,6 @@ final class AppViewModel: ObservableObject {
     @Published var accentColors: AccentColorSettings = .default
     @Published var displayPreferences: DisplayPreferences = .default
     @Published var usageAlertSettings: UsageAlertSettings = .default
-    @Published private(set) var communicationMethod: CommunicationMethod = .myIIJmioGAPI
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
@@ -34,7 +34,6 @@ final class AppViewModel: ObservableObject {
     private let accentColorStore = AccentColorStore()
     private let displayPreferenceStore = DisplayPreferencesStore()
     private let usageAlertStore = UsageAlertStore()
-    private let communicationMethodStore = CommunicationMethodStore()
     private let refreshLogStore = RefreshLogStore()
 
     /// 実行中の更新タスク。SwiftUI の `.refreshable` は自身の Task を
@@ -48,7 +47,6 @@ final class AppViewModel: ObservableObject {
         accentColors = accentColorStore.load()
         displayPreferences = displayPreferenceStore.load()
         usageAlertSettings = usageAlertStore.load()
-        communicationMethod = communicationMethodStore.load()
 
         if let saved = try? credentialStore.load() {
             mioId = saved.mioId
@@ -105,12 +103,6 @@ final class AppViewModel: ObservableObject {
         displayPreferenceStore.save(displayPreferences)
     }
 
-    func updateCalculateTodayFromRemaining(_ newValue: Bool) {
-        guard displayPreferences.calculateTodayFromRemaining != newValue else { return }
-        displayPreferences.calculateTodayFromRemaining = newValue
-        displayPreferenceStore.save(displayPreferences)
-    }
-
     func updateHidePhoneOnScreenshot(_ newValue: Bool) {
         guard displayPreferences.hidePhoneOnScreenshot != newValue else { return }
         displayPreferences.hidePhoneOnScreenshot = newValue
@@ -122,14 +114,6 @@ final class AppViewModel: ObservableObject {
 
         usageAlertSettings = newValue
         usageAlertStore.save(usageAlertSettings)
-    }
-
-    func updateCommunicationMethod(_ newValue: CommunicationMethod) {
-        guard communicationMethod != newValue else { return }
-        communicationMethodStore.save(newValue)
-        communicationMethod = newValue
-        lastLoginSource = nil
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
     }
 
     var canSubmit: Bool {
@@ -145,12 +129,6 @@ final class AppViewModel: ObservableObject {
             return "キーチェーンからMyIIJmioへログインしました"
         case .gapiManual:
             return "入力した資格情報でMyIIJmioへログインしました"
-        case .sessionCookie:
-            return "セッションCookieで自動ログインしました"
-        case .keychain:
-            return "キーチェーンの資格情報でログインしました"
-        case .manual:
-            return "入力した資格情報でログインしました"
         case .mock:
             return "モックデータでプレビュー中です"
         }
@@ -169,11 +147,17 @@ final class AppViewModel: ObservableObject {
         Task { _ = await refresh(trigger: .manual) }
     }
 
+    func refreshUsageHistory() async {
+        if currentPayload() == nil {
+            guard case .success = await refresh(trigger: .automatic) else { return }
+        }
+        _ = await refresh(trigger: .usageTab)
+    }
+
     func fetchBillDetail(for entry: BillSummaryResponse.BillEntry) async throws -> BillDetailResponse {
         return try await widgetRefreshService.fetchBillDetail(
             entry: entry,
-            manualCredentials: credentialFieldsHidden ? nil : currentManualCredentials(),
-            communicationMethod: communicationMethod
+            manualCredentials: credentialFieldsHidden ? nil : currentManualCredentials()
         )
     }
 
@@ -183,6 +167,7 @@ final class AppViewModel: ObservableObject {
 
     func logout() throws {
         try credentialStore.delete()
+        inFlightRefresh?.task.cancel()
         mioId = ""
         password = ""
         credentialFieldsHidden = false
@@ -197,14 +182,13 @@ final class AppViewModel: ObservableObject {
     /// 呼び出し元 (引っ張って更新) がキャンセルされても取得処理は最後まで走り切る。
     @discardableResult
     func refresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
-        if let inFlight = inFlightRefresh {
+        while let inFlight = inFlightRefresh {
             let result = await inFlight.task.value
-            // 自動更新に相乗りしただけでは ForceUpdate ヘッダが付かず、
-            // 引っ張って更新なのにサーバのキャッシュが返りうる。
-            // 手動更新は自動更新の完了を待ってから改めて自前で走らせる。
-            guard trigger == .manual, inFlight.trigger == .automatic else { return result }
-            guard inFlightRefresh == nil else { return result }
+            // 同じ更新は相乗り。GAPI更新と30日表取得は互いの完了を待って別々に実行する。
+            if trigger == inFlight.trigger || (trigger == .automatic && inFlight.trigger != .usageTab) { return result }
         }
+        guard !Task.isCancelled else { return .failure(CancellationError()) }
+        guard trigger != .usageTab || currentPayload() != nil else { return .failure(CancellationError()) }
 
         let task = Task { @MainActor [weak self] in
             guard let self else { return Result<Void, Error>.failure(CancellationError()) }
@@ -219,24 +203,25 @@ final class AppViewModel: ObservableObject {
         let previousPayload = currentPayload()
         state = .loading(previous: previousPayload)
 
-        let manualCredentials = currentManualCredentials()
-        let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
-
         do {
-            let outcome = try await widgetRefreshService.refresh(
-                manualCredentials: manualCredentials,
-                persistManualCredentials: true,
-                allowSessionReuse: !forceManualLogin,
-                allowKeychainFallback: !forceManualLogin,
-                calculateTodayFromRemaining: displayPreferences.calculateTodayFromRemaining,
-                dailyFetchMode: displayPreferences.calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable,
-                forceGAPIUpdate: trigger == .manual,
-                communicationMethod: communicationMethod
-            )
-            WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
-            state = .loaded(outcome.payload)
-            lastLoginSource = outcome.loginSource
-            handleCredentialVisibility(after: outcome.loginSource)
+            if trigger == .usageTab {
+                state = .loaded(try await widgetRefreshService.refreshUsageHistory())
+            } else {
+                let manualCredentials = currentManualCredentials()
+                let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
+                    && (try? credentialStore.load()) != manualCredentials
+                let outcome = try await widgetRefreshService.refresh(
+                    manualCredentials: manualCredentials,
+                    persistManualCredentials: true,
+                    allowSessionReuse: !forceManualLogin,
+                    allowKeychainFallback: !forceManualLogin,
+                    forceGAPIUpdate: trigger == .manual
+                )
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
+                state = .loaded(outcome.payload)
+                lastLoginSource = outcome.loginSource
+                handleCredentialVisibility(after: outcome.loginSource)
+            }
             refreshLogStore.append(
                 trigger: trigger.logTrigger,
                 result: .success
@@ -245,8 +230,8 @@ final class AppViewModel: ObservableObject {
         } catch {
             // キャンセルはユーザーに見せるべき失敗ではないので、
             // バナーもログも出さずに直前の状態へ戻す。
-            if TaskCancellation.isCancellation(error) {
-                state = previousPayload.map { LoadState.loaded($0) } ?? .idle
+            if Task.isCancelled || TaskCancellation.isCancellation(error) {
+                state = canSubmit ? (previousPayload.map { .loaded($0) } ?? .idle) : .idle
                 return .failure(error)
             }
             state = .failed(error.localizedDescription, lastPayload: previousPayload)
@@ -290,16 +275,6 @@ final class AppViewModel: ObservableObject {
             }
         case .gapiManual:
             credentialFieldsHidden = false
-        case .sessionCookie:
-            credentialFieldsHidden = true
-        case .keychain:
-            credentialFieldsHidden = true
-            if let stored = try? credentialStore.load() {
-                mioId = stored.mioId
-                password = stored.password
-            }
-        case .manual:
-            credentialFieldsHidden = false
         case .mock:
             credentialFieldsHidden = true
             if let stored = try? credentialStore.load() {
@@ -319,6 +294,8 @@ private extension AppViewModel.RefreshTrigger {
             return .appAutomatic
         case .manual:
             return .appManual
+        case .usageTab:
+            return .appUsageHistory
         }
     }
 }

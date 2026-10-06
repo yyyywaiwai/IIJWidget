@@ -1,7 +1,7 @@
 import Foundation
 
 struct AggregatePayloadStore {
-    private let key = "aggregate.payload.cache"
+    private let key = "gapi.payload.v2"
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 

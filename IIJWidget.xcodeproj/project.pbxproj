@@ -42,9 +42,22 @@
 		A5F306572F2C8B4800D89DAB /* MioWidget.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = MioWidget.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A5F3D0CE2F3D0CE0000000CE /* PBXFileSystemSynchronizedBuildFileExceptionSet for Info.plist */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A56787032EC1360000C50874 /* MioWIdget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A56787062EC1360000C50874 /* IIJWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A5F3D0CE2F3D0CE0000000CE /* PBXFileSystemSynchronizedBuildFileExceptionSet for Info.plist */,
+			);
 			path = IIJWidget;
 			sourceTree = "<group>";
 		};
@@ -363,6 +376,7 @@
 				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IIJWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MioWidget;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -398,6 +412,7 @@
 				DEVELOPMENT_TEAM = FZ35ZF3CZV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = IIJWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MioWidget;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

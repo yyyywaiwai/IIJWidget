@@ -1,20 +1,25 @@
 import Foundation
 
 struct MonthlyUsageEntry: Codable, Identifiable, Equatable {
-    let id: String
     let monthLabel: String
+    var id: String { monthLabel }
     let highSpeedGB: Double?
     let lowSpeedGB: Double?
-    let highSpeedText: String?
-    let lowSpeedText: String?
+    var highSpeedText: String? { highSpeedGB.map { "\($0)GB" } }
+    var lowSpeedText: String? { lowSpeedGB.map { "\($0)GB" } }
     let note: String?
     let hasData: Bool
 
+    init(monthLabel: String, highSpeedGB: Double?, lowSpeedGB: Double?, note: String?, hasData: Bool) {
+        self.monthLabel = UsageDateLabel.normalize(monthLabel, components: 2)
+        self.highSpeedGB = highSpeedGB
+        self.lowSpeedGB = lowSpeedGB
+        self.note = note
+        self.hasData = hasData
+    }
+
     init(monthLabel: String, highText: String?, lowText: String?, note: String?, hasData: Bool) {
-        self.id = monthLabel
-        self.monthLabel = monthLabel
-        self.highSpeedText = highText?.trimmedOrNil
-        self.lowSpeedText = lowText?.trimmedOrNil
+        self.monthLabel = UsageDateLabel.normalize(monthLabel, components: 2)
         self.note = note?.trimmedOrNil
         self.hasData = hasData
         self.highSpeedGB = DataUsageValueParser.parseAmount(highText, target: .gigabyte)
@@ -23,29 +28,34 @@ struct MonthlyUsageEntry: Codable, Identifiable, Equatable {
 }
 
 struct MonthlyUsageService: Codable, Identifiable, Equatable {
-    let hdoCode: String
+    let lineID: String
     let titlePrimary: String
     let titleDetail: String?
     let entries: [MonthlyUsageEntry]
 
-    var id: String { hdoCode }
+    var id: String { lineID }
 }
 
 struct DailyUsageEntry: Codable, Identifiable, Equatable {
-    let id: String
     let dateLabel: String
+    var id: String { dateLabel }
     let highSpeedMB: Double?
     let lowSpeedMB: Double?
-    let highSpeedText: String?
-    let lowSpeedText: String?
+    var highSpeedText: String? { highSpeedMB.map { "\($0)MB" } }
+    var lowSpeedText: String? { lowSpeedMB.map { "\($0)MB" } }
     let note: String?
     let hasData: Bool
 
+    init(dateLabel: String, highSpeedMB: Double?, lowSpeedMB: Double?, note: String?, hasData: Bool) {
+        self.dateLabel = UsageDateLabel.normalize(dateLabel, components: 3)
+        self.highSpeedMB = highSpeedMB
+        self.lowSpeedMB = lowSpeedMB
+        self.note = note
+        self.hasData = hasData
+    }
+
     init(dateLabel: String, highText: String?, lowText: String?, note: String?, hasData: Bool) {
-        self.id = dateLabel
-        self.dateLabel = dateLabel
-        self.highSpeedText = highText?.trimmedOrNil
-        self.lowSpeedText = lowText?.trimmedOrNil
+        self.dateLabel = UsageDateLabel.normalize(dateLabel, components: 3)
         self.note = note?.trimmedOrNil
         self.hasData = hasData
         self.highSpeedMB = DataUsageValueParser.parseAmount(highText, target: .megabyte)
@@ -54,16 +64,32 @@ struct DailyUsageEntry: Codable, Identifiable, Equatable {
 }
 
 struct DailyUsageService: Codable, Identifiable, Equatable {
-    let hdoCode: String
+    let lineID: String
     let titlePrimary: String
     let titleDetail: String?
     let entries: [DailyUsageEntry]
 
-    var id: String { hdoCode }
+    var id: String { lineID }
+}
+
+enum UsageDateLabel {
+    static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        return calendar
+    }
+
+    static func normalize(_ label: String, components: Int) -> String {
+        let values = label.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard values.count >= components, values[0] >= 1000,
+              (1...12).contains(values[1]) else { return label }
+        if components == 2 { return String(format: "%04d年%02d月", values[0], values[1]) }
+        guard (1...31).contains(values[2]) else { return label }
+        return String(format: "%04d年%02d月%02d日", values[0], values[1], values[2])
+    }
 }
 
 struct DataUsageFormDescriptor {
-    let formId: String
     let hdoCode: String
     let csrfToken: String
 }
@@ -90,36 +116,10 @@ struct DataUsageHTMLParser {
                   let csrf = captureInput(named: "_csrf", in: formHTML) else {
                 continue
             }
-            let formId = captureAttribute("id", in: formHTML) ?? UUID().uuidString
-            forms.append(DataUsageFormDescriptor(formId: formId, hdoCode: hdoCode, csrfToken: csrf))
+            forms.append(DataUsageFormDescriptor(hdoCode: hdoCode, csrfToken: csrf))
         }
 
         return DataUsageLandingPage(forms: forms)
-    }
-
-    func extractCSRFToken() -> String? {
-        captureInput(named: "_csrf", in: html)
-    }
-
-    func previewDailyServices(for forms: [DataUsageFormDescriptor]) -> [String: DailyUsageService] {
-        let blocks = viewdataBlocks()
-        guard !blocks.isEmpty else { return [:] }
-        var map: [String: DailyUsageService] = [:]
-
-        for (index, form) in forms.enumerated() {
-            guard index < blocks.count else { break }
-            if let service = parseDailyService(from: blocks[index], hdoCode: form.hdoCode) {
-                map[form.hdoCode] = service
-            }
-        }
-
-        return map
-    }
-
-    func parseMonthlyService(hdoCode: String) -> MonthlyUsageService? {
-        guard let meta = extractServiceMetadata() else { return nil }
-        let entries = parseMonthlyRows(from: meta.tableHTML)
-        return MonthlyUsageService(hdoCode: hdoCode, titlePrimary: meta.title, titleDetail: meta.detail, entries: entries)
     }
 
     func parseDailyService(hdoCode: String) -> DailyUsageService? {
@@ -130,12 +130,7 @@ struct DataUsageHTMLParser {
     private func parseDailyService(from block: String, hdoCode: String) -> DailyUsageService? {
         guard let meta = extractServiceMetadata(from: block) else { return nil }
         let entries = parseDailyRows(from: meta.tableHTML)
-        return DailyUsageService(hdoCode: hdoCode, titlePrimary: meta.title, titleDetail: meta.detail, entries: entries)
-    }
-
-    private func extractServiceMetadata() -> UsageServiceMetadata? {
-        guard let block = firstViewdataBlock() else { return nil }
-        return extractServiceMetadata(from: block)
+        return DailyUsageService(lineID: hdoCode, titlePrimary: meta.title, titleDetail: meta.detail, entries: entries)
     }
 
     private func extractServiceMetadata(from block: String) -> UsageServiceMetadata? {
@@ -161,38 +156,6 @@ struct DataUsageHTMLParser {
         let blockRegex = try! NSRegularExpression(pattern: #"(?s)<div class=\"viewdata\">(.*?)</table>\s*</div>"#)
         let nsString = html as NSString
         return blockRegex.matches(in: html, range: NSRange(location: 0, length: nsString.length)).map { nsString.substring(with: $0.range) }
-    }
-
-    private func parseMonthlyRows(from tableHTML: String) -> [MonthlyUsageEntry] {
-        var entries: [MonthlyUsageEntry] = []
-        let rowRegex = try! NSRegularExpression(pattern: #"(?s)<tr[^>]*>.*?</tr>"#)
-        let nsString = tableHTML as NSString
-
-        for match in rowRegex.matches(in: tableHTML, range: NSRange(location: 0, length: nsString.length)) {
-            let rowHTML = nsString.substring(with: match.range)
-            if rowHTML.contains("viewdata-header") { continue }
-
-            if rowHTML.contains("viewdata-detail-cell-none") {
-                guard let monthHTML = firstMatch(in: rowHTML, pattern: #"(?s)<td[^>]*>(.*?)</td>"#) else { continue }
-                let month = plainText(from: monthHTML)
-                let noteHTML = firstMatch(in: rowHTML, pattern: #"(?s)<td[^>]*colspan=\"2\"[^>]*>(.*?)</td>"#)
-                let note = noteHTML.flatMap { plainText(from: $0) }
-                entries.append(MonthlyUsageEntry(monthLabel: month, highText: nil, lowText: nil, note: note, hasData: false))
-                continue
-            }
-
-            let cellRegex = try! NSRegularExpression(pattern: #"(?s)<td[^>]*>(.*?)</td>"#)
-            let rowNSString = rowHTML as NSString
-            let cellMatches = cellRegex.matches(in: rowHTML, range: NSRange(location: 0, length: rowNSString.length))
-            guard cellMatches.count >= 3 else { continue }
-
-            let month = plainText(from: rowNSString.substring(with: cellMatches[0].range))
-            let high = plainText(from: rowNSString.substring(with: cellMatches[1].range))
-            let low = plainText(from: rowNSString.substring(with: cellMatches[2].range))
-            entries.append(MonthlyUsageEntry(monthLabel: month, highText: high, lowText: low, note: nil, hasData: true))
-        }
-
-        return entries
     }
 
     private func parseDailyRows(from tableHTML: String) -> [DailyUsageEntry] {
@@ -316,7 +279,7 @@ private enum DataUsageValueParser {
 
         text = text.replacingOccurrences(of: ",", with: "")
         text = text.replacingOccurrences(of: " ", with: "")
-        guard let value = Double(text) else { return nil }
+        guard let value = Double(text), value.isFinite, value >= 0 else { return nil }
 
         let unit = sourceUnit ?? target
         let valueInMB: Double = {

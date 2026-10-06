@@ -1,31 +1,8 @@
 import Foundation
 
-enum WidgetRefreshError: LocalizedError {
-    case missingCredentials
-
-    var errorDescription: String? {
-        switch self {
-        case .missingCredentials:
-            return "キーチェーンまたは入力済みの資格情報が見つかりませんでした"
-        }
-    }
-}
-
 struct WidgetRefreshService {
-    enum LoginSource {
-        case gapiToken
-        case gapiKeychain
-        case gapiManual
-        case sessionCookie
-        case keychain
-        case manual
-        case mock
-    }
-
-    enum FetchScope {
-        case full
-        case topOnly
-    }
+    enum LoginSource { case gapiToken, gapiKeychain, gapiManual, mock }
+    enum FetchScope { case full, topOnly }
 
     struct RefreshOutcome {
         let payload: AggregatePayload
@@ -34,49 +11,16 @@ struct WidgetRefreshService {
 
     private let credentialStore = CredentialStore()
     private let gapiClient = MyIIJmioAPIClient()
-    private let apiClient = IIJAPIClient()
+    private let dailyClient = ThirtyDayUsageClient()
     private let widgetDataStore = WidgetDataStore()
     private let payloadStore = AggregatePayloadStore()
-    private let communicationMethodStore = CommunicationMethodStore()
     private let debugStore = DebugResponseStore.shared
-    func refreshForWidget(
-        calculateTodayFromRemaining: Bool,
-        forceGAPIUpdate: Bool = false,
-        communicationMethod: CommunicationMethod? = nil
-    ) async throws -> RefreshOutcome {
+
+    func refreshForWidget(forceGAPIUpdate: Bool = false) async throws -> RefreshOutcome {
+        // 同日のGAPI月次・契約・請求は再利用。30日表はここでは取得しない。
         let cached = payloadStore.load()
-        let isCompletePayload = {
-            guard let cached else { return false }
-            return !cached.dailyUsage.isEmpty && !cached.monthlyUsage.isEmpty && !cached.top.serviceInfoList.isEmpty
-        }()
-
-        if calculateTodayFromRemaining {
-            let scope: FetchScope = isCompletePayload ? .topOnly : .full
-            return try await refresh(
-                manualCredentials: nil,
-                persistManualCredentials: false,
-                allowSessionReuse: true,
-                allowKeychainFallback: true,
-                fetchScope: scope,
-                calculateTodayFromRemaining: true,
-                dailyFetchMode: .tableOnly,
-                forceGAPIUpdate: forceGAPIUpdate,
-                communicationMethod: communicationMethod
-            )
-        }
-
-        // トグルOFF時は常にフルフェッチでプレビュー+30日マージ
-        return try await refresh(
-            manualCredentials: nil,
-            persistManualCredentials: false,
-            allowSessionReuse: true,
-            allowKeychainFallback: true,
-            fetchScope: .full,
-            calculateTodayFromRemaining: false,
-            dailyFetchMode: .mergedPreviewAndTable,
-            forceGAPIUpdate: forceGAPIUpdate,
-            communicationMethod: communicationMethod
-        )
+        let freshHistory = cached.map { UsageDateLabel.calendar.isDateInToday($0.historyFetchedAt) } ?? false
+        return try await refresh(fetchScope: freshHistory && !forceGAPIUpdate ? .topOnly : .full, forceGAPIUpdate: forceGAPIUpdate)
     }
 
     func refresh(
@@ -85,201 +29,97 @@ struct WidgetRefreshService {
         allowSessionReuse: Bool = true,
         allowKeychainFallback: Bool = true,
         fetchScope: FetchScope = .full,
-        calculateTodayFromRemaining: Bool = false,
-        dailyFetchMode: DailyFetchMode? = nil,
-        forceGAPIUpdate: Bool = false,
-        communicationMethod: CommunicationMethod? = nil
+        forceGAPIUpdate: Bool = false
     ) async throws -> RefreshOutcome {
         debugStore.beginCaptureSession()
         defer { debugStore.finalizeCaptureSession() }
+        if let mock = mockOutcome(manualCredentials: manualCredentials,
+                                  persistManualCredentials: persistManualCredentials,
+                                  allowKeychainFallback: allowKeychainFallback) { return mock }
+        if !allowSessionReuse { clearSessionArtifacts() }
+        let stored = allowKeychainFallback ? try credentialStore.load() : nil
+        let credentials = manualCredentials ?? stored
+        let cached = payloadStore.load()
+        // 初回・回線変更時に不完全なtop-onlyキャッシュを作らない。
+        let useTopOnly = fetchScope == .topOnly && cached != nil
+        var source: LoginSource = .gapiToken
+        let fetched: AggregatePayload
 
-        let fallbackPayload = payloadStore.load()
-
-        if let mock = mockOutcome(
-            manualCredentials: manualCredentials,
-            persistManualCredentials: persistManualCredentials,
-            allowKeychainFallback: allowKeychainFallback
-        ) {
-            return mock
-        }
-
-        if !allowSessionReuse {
-            gapiClient.clearPersistedSession()
-            apiClient.clearPersistedSession()
-        }
-
-        let resolvedDailyMode: DailyFetchMode = dailyFetchMode
-            ?? (calculateTodayFromRemaining ? .tableOnly : .mergedPreviewAndTable)
-
-        let selectedMethod = communicationMethod ?? communicationMethodStore.load()
-        switch selectedMethod {
-        case .myIIJmioGAPI:
-            return try await refreshUsingGAPI(
-                manualCredentials: manualCredentials,
-                persistManualCredentials: persistManualCredentials,
-                allowSessionReuse: allowSessionReuse,
-                allowKeychainFallback: allowKeychainFallback,
-                fetchScope: fetchScope,
-                fallbackPayload: fallbackPayload,
-                calculateTodayFromRemaining: calculateTodayFromRemaining,
-                forceUpdate: forceGAPIUpdate
-            )
-        case .legacyMemberSite:
-            return try await refreshUsingLegacyMemberSite(
-                manualCredentials: manualCredentials,
-                persistManualCredentials: persistManualCredentials,
-                allowSessionReuse: allowSessionReuse,
-                allowKeychainFallback: allowKeychainFallback,
-                fetchScope: fetchScope,
-                fallbackPayload: fallbackPayload,
-                dailyFetchMode: resolvedDailyMode,
-                calculateTodayFromRemaining: calculateTodayFromRemaining
-            )
-        }
-    }
-
-    private func refreshUsingGAPI(
-        manualCredentials: Credentials?,
-        persistManualCredentials: Bool,
-        allowSessionReuse: Bool,
-        allowKeychainFallback: Bool,
-        fetchScope: FetchScope,
-        fallbackPayload: AggregatePayload?,
-        calculateTodayFromRemaining: Bool,
-        forceUpdate: Bool
-    ) async throws -> RefreshOutcome {
-        var latestError: Error?
-
-        if allowSessionReuse {
-            do {
-                return finalize(
-                    payload: try await fetchUsingExistingGAPISession(
-                        scope: fetchScope,
-                        fallback: fallbackPayload,
-                        calculateTodayFromRemaining: calculateTodayFromRemaining,
-                        forceUpdate: forceUpdate
-                    ),
-                    source: .gapiToken
-                )
-            } catch {
-                if gapiClient.isAuthenticationError(error) {
-                    gapiClient.clearPersistedSession()
+        func fetch(_ credentials: Credentials?) async throws -> AggregatePayload {
+            if useTopOnly, let cached {
+                let latest: (top: TrafficSummary, dailyUsage: [DailyUsageService])
+                if let credentials {
+                    latest = try await gapiClient.fetchTop(credentials: credentials, forceUpdate: forceGAPIUpdate)
                 } else {
-                    latestError = error
+                    latest = try await gapiClient.fetchTopUsingExistingSession(forceUpdate: forceGAPIUpdate)
                 }
-                recordGAPIError(error, stage: "stored-token")
+                if Set(latest.top.serviceInfoList.map(\.id)) == Set(cached.top.serviceInfoList.map(\.id)) {
+                    return AggregatePayload(
+                        fetchedAt: Date(), top: latest.top, bill: cached.bill,
+                        serviceStatus: cached.serviceStatus, monthlyUsage: cached.monthlyUsage,
+                        dailyUsage: DailyUsageMerger.merge(history: cached.dailyUsage, current: latest.dailyUsage),
+                        billDetails: cached.billDetails, historyFetchedAt: cached.historyFetchedAt
+                    )
+                }
             }
-        }
-
-        let storedCredentials: Credentials?
-        if allowKeychainFallback {
-            storedCredentials = try credentialStore.load()
-        } else {
-            storedCredentials = nil
-        }
-
-        if let storedCredentials {
-            do {
-                return finalize(
-                    payload: try await fetchWithGAPICredentials(
-                        storedCredentials,
-                        scope: fetchScope,
-                        fallback: fallbackPayload,
-                        calculateTodayFromRemaining: calculateTodayFromRemaining,
-                        forceUpdate: forceUpdate
-                    ),
-                    source: .gapiKeychain
-                )
-            } catch {
-                if gapiClient.isAuthenticationError(error) {
-                    gapiClient.clearPersistedSession()
-                }
-                recordGAPIError(error, stage: "keychain-login")
-                latestError = error
+            let gapi: AggregatePayload
+            if let credentials {
+                gapi = try await gapiClient.fetchAll(credentials: credentials, forceUpdate: forceGAPIUpdate)
+            } else {
+                gapi = try await gapiClient.fetchAllUsingExistingSession(forceUpdate: forceGAPIUpdate)
             }
-        }
-
-        if let manual = manualCredentials, !manual.mioId.isEmpty, !manual.password.isEmpty {
-            do {
-                let payload = try await fetchWithGAPICredentials(
-                    manual,
-                    scope: fetchScope,
-                    fallback: fallbackPayload,
-                    calculateTodayFromRemaining: calculateTodayFromRemaining,
-                    forceUpdate: forceUpdate
-                )
-                if persistManualCredentials {
-                    try? credentialStore.save(manual)
-                }
-                return finalize(payload: payload, source: .gapiManual)
-            } catch {
-                if gapiClient.isAuthenticationError(error) {
-                    gapiClient.clearPersistedSession()
-                }
-                recordGAPIError(error, stage: "manual-login")
-                latestError = error
-            }
-        }
-
-        if let latestError {
-            throw latestError
-        }
-        throw WidgetRefreshError.missingCredentials
-    }
-
-    private func refreshUsingLegacyMemberSite(
-        manualCredentials: Credentials?,
-        persistManualCredentials: Bool,
-        allowSessionReuse: Bool,
-        allowKeychainFallback: Bool,
-        fetchScope: FetchScope,
-        fallbackPayload: AggregatePayload?,
-        dailyFetchMode: DailyFetchMode,
-        calculateTodayFromRemaining: Bool
-    ) async throws -> RefreshOutcome {
-        let storedCredentials: Credentials?
-        if allowKeychainFallback {
-            storedCredentials = try credentialStore.load()
-        } else {
-            storedCredentials = nil
+            return gapi
         }
 
         if allowSessionReuse {
             do {
-                return finalize(
-                    payload: try await fetchUsingExistingSession(scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
-                    source: .sessionCookie
-                )
-            } catch IIJAPIClientError.invalidSession {
-                // セッションが切れているので次の段階へフォールバック
-            }
-        }
-
-        if let stored = storedCredentials {
-            do {
-                return finalize(
-                    payload: try await fetchWithCredentials(stored, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining),
-                    source: .keychain
-                )
+                fetched = try await fetch(nil)
             } catch {
-                if apiClient.isAuthenticationError(error) {
-                    try? credentialStore.delete()
-                    gapiClient.clearPersistedSession()
-                } else {
-                    throw error
-                }
+                guard gapiClient.isAuthenticationError(error) else { throw error }
+                gapiClient.clearPersistedSession()
+                guard let credentials else { throw WidgetRefreshError.missingCredentials }
+                fetched = try await fetch(credentials)
+                source = manualCredentials != nil ? .gapiManual : .gapiKeychain
             }
+        } else {
+            guard let credentials else { throw WidgetRefreshError.missingCredentials }
+            fetched = try await fetch(credentials)
+            source = manualCredentials != nil ? .gapiManual : .gapiKeychain
         }
+        // 通常更新はGAPIのみ。取得済みの30日表は現存する回線分だけ保持する。
+        var result = fetched
+        let lineIDs = Set(result.top.serviceInfoList.map(\.id))
+        result.thirtyDayUsage = payloadStore.load()?.thirtyDayUsage?.filter { lineIDs.contains($0.lineID) }
+        try Task.checkCancellation()
+        if persistManualCredentials, let manualCredentials { try credentialStore.save(manualCredentials) }
+        return finalize(payload: result, source: source)
+    }
 
-        if let manual = manualCredentials, !manual.mioId.isEmpty, !manual.password.isEmpty {
-            let payload = try await fetchWithCredentials(manual, scope: fetchScope, fallback: fallbackPayload, dailyFetchMode: dailyFetchMode, calculateTodayFromRemaining: calculateTodayFromRemaining)
-            if persistManualCredentials {
-                try? credentialStore.save(manual)
-            }
-            return finalize(payload: payload, source: .manual)
+    /// 利用量タブを開いた時だけ取得する。GAPIの更新日時や認証状態は変更しない。
+    func refreshUsageHistory() async throws -> AggregatePayload {
+        guard let cached = payloadStore.load() else { throw MyIIJmioAPIError.invalidResponse }
+        let credentials = try credentialStore.load()
+        if let credentials, MockPayloadProvider.isMockCredentials(credentials) { return cached }
+        debugStore.beginCaptureSession()
+        defer { debugStore.finalizeCaptureSession() }
+
+        let history: [DailyUsageService]
+        do {
+            history = try await dailyClient.fetchThirtyDays()
+        } catch {
+            guard dailyClient.isAuthenticationError(error) else { throw error }
+            guard let credentials else { throw WidgetRefreshError.missingCredentials }
+            history = try await dailyClient.fetchThirtyDays(credentials: credentials)
         }
-
-        throw WidgetRefreshError.missingCredentials
+        let normalized = try DailyUsageMerger.match(history: history, lines: cached.top.serviceInfoList)
+        try Task.checkCancellation()
+        // 取得中のWidget更新を巻き戻さず、ログアウト・アカウント/回線変更後には保存しない。
+        guard var latest = payloadStore.load(),
+              Set(latest.top.serviceInfoList.map(\.id)) == Set(cached.top.serviceInfoList.map(\.id)),
+              try credentialStore.load() == credentials else { throw ThirtyDayUsageError.invalidSession }
+        latest.thirtyDayUsage = normalized
+        payloadStore.save(payload: latest)
+        return latest
     }
 
     private func finalize(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
@@ -325,510 +165,33 @@ struct WidgetRefreshService {
         return nil
     }
 
-    func fetchBillDetail(
-        entry: BillSummaryResponse.BillEntry,
-        manualCredentials: Credentials? = nil,
-        communicationMethod: CommunicationMethod? = nil
-    ) async throws -> BillDetailResponse {
-        // Check for mock credentials first
-        if let manual = manualCredentials, MockPayloadProvider.isMockCredentials(manual) {
-            guard let mockDetail = MockPayloadProvider.billDetail(for: entry) else {
-                throw NSError(
-                    domain: "WidgetRefreshService",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "モック請求詳細データを生成できませんでした"]
-                )
-            }
-            return mockDetail
-        }
 
-        if let stored = try? credentialStore.load(), MockPayloadProvider.isMockCredentials(stored) {
-            guard let mockDetail = MockPayloadProvider.billDetail(for: entry) else {
-                throw NSError(
-                    domain: "WidgetRefreshService",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "モック請求詳細データを生成できませんでした"]
-                )
-            }
-            return mockDetail
+    func fetchBillDetail(entry: BillSummaryResponse.BillEntry, manualCredentials: Credentials? = nil) async throws -> BillDetailResponse {
+        if let manualCredentials, MockPayloadProvider.isMockCredentials(manualCredentials) {
+            guard let detail = MockPayloadProvider.billDetail(for: entry) else { throw MyIIJmioAPIError.invalidResponse }
+            return detail
         }
-
-        switch communicationMethod ?? communicationMethodStore.load() {
-        case .myIIJmioGAPI:
-            return try await fetchGAPIBillDetail(entry: entry, manualCredentials: manualCredentials)
-        case .legacyMemberSite:
-            return try await fetchLegacyBillDetail(entry: entry, manualCredentials: manualCredentials)
+        if let stored = try credentialStore.load(), MockPayloadProvider.isMockCredentials(stored) {
+            guard let detail = MockPayloadProvider.billDetail(for: entry) else { throw MyIIJmioAPIError.invalidResponse }
+            return detail
         }
-    }
-
-    private func fetchGAPIBillDetail(
-        entry: BillSummaryResponse.BillEntry,
-        manualCredentials: Credentials?
-    ) async throws -> BillDetailResponse {
+        if let detail = payloadStore.load()?.billDetails[entry.id] { return detail }
         do {
             return try await gapiClient.fetchBillDetailUsingExistingSession(entry: entry)
         } catch {
             guard gapiClient.isAuthenticationError(error) else { throw error }
             gapiClient.clearPersistedSession()
         }
-
-        if let stored = try? credentialStore.load() {
-            return try await gapiClient.fetchBillDetail(entry: entry, credentials: stored)
+        guard let credentials = try manualCredentials ?? credentialStore.load() else {
+            throw WidgetRefreshError.missingCredentials
         }
-
-        if let manual = manualCredentials {
-            return try await gapiClient.fetchBillDetail(entry: entry, credentials: manual)
-        }
-
-        throw WidgetRefreshError.missingCredentials
-    }
-
-    private func fetchLegacyBillDetail(
-        entry: BillSummaryResponse.BillEntry,
-        manualCredentials: Credentials?
-    ) async throws -> BillDetailResponse {
-        do {
-            return try await apiClient.fetchBillDetail(entry: entry)
-        } catch {
-            guard apiClient.isAuthenticationError(error) else { throw error }
-        }
-
-        if let stored = try? credentialStore.load() {
-            do {
-                return try await apiClient.fetchBillDetail(entry: entry, credentials: stored)
-            } catch {
-                if apiClient.isAuthenticationError(error) {
-                    try? credentialStore.delete()
-                } else {
-                    throw error
-                }
-            }
-        }
-
-        if let manual = manualCredentials {
-            return try await apiClient.fetchBillDetail(entry: entry, credentials: manual)
-        }
-
-        throw WidgetRefreshError.missingCredentials
+        return try await gapiClient.fetchBillDetail(entry: entry, credentials: credentials)
     }
 
     func clearSessionArtifacts() {
         gapiClient.clearPersistedSession()
-        apiClient.clearPersistedSession()
+        dailyClient.clearPersistedSession()
         payloadStore.clear()
         widgetDataStore.clear()
-    }
-
-    private func fetchUsingExistingSession(
-        scope: FetchScope,
-        fallback: AggregatePayload?,
-        dailyFetchMode: DailyFetchMode,
-        calculateTodayFromRemaining: Bool
-    ) async throws -> AggregatePayload {
-        switch scope {
-        case .full:
-            let payload = try await apiClient.fetchUsingExistingSession(dailyFetchMode: dailyFetchMode)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        case .topOnly:
-            let top = try await apiClient.fetchTopUsingExistingSession()
-            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        }
-    }
-
-    private func fetchUsingExistingGAPISession(
-        scope: FetchScope,
-        fallback: AggregatePayload?,
-        calculateTodayFromRemaining: Bool,
-        forceUpdate: Bool
-    ) async throws -> AggregatePayload {
-        switch scope {
-        case .full:
-            let payload = try await gapiClient.fetchAllUsingExistingSession(forceUpdate: forceUpdate)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        case .topOnly:
-            let top = try await gapiClient.fetchTopUsingExistingSession(forceUpdate: forceUpdate)
-            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        }
-    }
-
-    private func fetchWithGAPICredentials(
-        _ credentials: Credentials,
-        scope: FetchScope,
-        fallback: AggregatePayload?,
-        calculateTodayFromRemaining: Bool,
-        forceUpdate: Bool
-    ) async throws -> AggregatePayload {
-        switch scope {
-        case .full:
-            let payload = try await gapiClient.fetchAll(credentials: credentials, forceUpdate: forceUpdate)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        case .topOnly:
-            let top = try await gapiClient.fetchTop(credentials: credentials, forceUpdate: forceUpdate)
-            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        }
-    }
-
-    private func recordGAPIError(_ error: Error, stage: String) {
-        debugStore.appendResponse(
-            title: "GAPI request failed",
-            path: "gapi/\(stage)",
-            category: .api,
-            rawText: error.localizedDescription,
-            formattedText: nil
-        )
-    }
-
-    private func fetchWithCredentials(
-        _ credentials: Credentials,
-        scope: FetchScope,
-        fallback: AggregatePayload?,
-        dailyFetchMode: DailyFetchMode,
-        calculateTodayFromRemaining: Bool
-    ) async throws -> AggregatePayload {
-        switch scope {
-        case .full:
-            let payload = try await apiClient.fetchAll(credentials: credentials, dailyFetchMode: dailyFetchMode)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        case .topOnly:
-            let top = try await apiClient.fetchTopOnly(credentials: credentials)
-            let payload = buildTopOnlyPayload(top: top, fallback: fallback)
-            return calculateTodayFromRemaining ? adjustTodayUsage(in: payload) : payload
-        }
-    }
-
-    private func buildTopOnlyPayload(top: MemberTopResponse, fallback: AggregatePayload?) -> AggregatePayload {
-        AggregatePayload(
-            fetchedAt: Date(),
-            top: top,
-            bill: fallback?.bill ?? BillSummaryResponse(billList: [], isVoiceSim: nil, isImt: nil),
-            serviceStatus: fallback?.serviceStatus ?? ServiceStatusResponse(serviceInfoList: [], jmbNumberChangePossible: nil),
-            monthlyUsage: fallback?.monthlyUsage ?? [],
-            dailyUsage: fallback?.dailyUsage ?? []
-        )
-    }
-
-    private func adjustTodayUsage(in payload: AggregatePayload) -> AggregatePayload {
-        guard let primaryServiceInfo = payload.top.serviceInfoList.first,
-              !payload.dailyUsage.isEmpty else {
-            return payload
-        }
-
-        let calendar = Calendar.current
-        let couponMetrics = resolveCouponMetrics(for: primaryServiceInfo, calendar: calendar)
-        let remaining = couponMetrics.remaining
-
-        let totalCapacityBase = resolveTotalCapacity(primary: primaryServiceInfo, services: payload.top.serviceInfoList)
-        guard totalCapacityBase > 0 else { return payload }
-        let totalCapacityWithCarryover = totalCapacityBase + couponMetrics.carryover
-
-        let today = calendar.startOfDay(for: Date())
-        func isTodayEntry(_ label: String) -> Bool {
-            if isSameDay(label: label, reference: today, calendar: calendar) {
-                return true
-            }
-            let normalized = label.replacingOccurrences(of: " ", with: "")
-            return normalized.contains("当日") || normalized.contains("本日") || normalized.contains("今日")
-        }
-
-        let hasConcreteToday = payload.dailyUsage.contains { service in
-            service.entries.contains { entry in
-                entry.hasData && isTodayEntry(entry.dateLabel)
-            }
-        }
-        if hasConcreteToday {
-            return payload
-        }
-
-        // 当月の累計MB (当日を除く) を集計
-        let currentMonth = calendar.component(.month, from: today)
-        let currentYear = calendar.component(.year, from: today)
-        let pastMB = payload.dailyUsage.reduce(0.0) { serviceSum, service in
-            serviceSum + service.entries.reduce(0.0) { entrySum, entry in
-                guard entry.hasData,
-                      !isTodayEntry(entry.dateLabel),
-                      let entryDate = parsedDate(from: entry.dateLabel, calendar: calendar),
-                      calendar.component(.month, from: entryDate) == currentMonth,
-                      calendar.component(.year, from: entryDate) == currentYear,
-                      !calendar.isDate(entryDate, inSameDayAs: today) else {
-                    return entrySum
-                }
-                return entrySum + (entry.highSpeedMB ?? 0)
-            }
-        }
-
-        // 残量差分から当日利用量を算出 (GB→MBは1024換算)
-        let usedTotalMBFromRemaining = max((totalCapacityWithCarryover - remaining) * 1024, 0)
-        let todayMBFromRemaining = max(usedTotalMBFromRemaining - pastMB, 0)
-        let monthlyHighSpeedMB = resolveMonthlyHighSpeedMB(
-            from: payload,
-            year: currentYear,
-            month: currentMonth,
-            calendar: calendar
-        )
-        let todayMBFromMonthly = max(monthlyHighSpeedMB - pastMB, 0)
-        let todayMB = max(todayMBFromRemaining, todayMBFromMonthly)
-
-        // 当日行をプライマリサービスに追加
-        var services = payload.dailyUsage.map { service in
-            let filteredEntries = service.entries.filter { !isTodayEntry($0.dateLabel) }
-            return DailyUsageService(
-                hdoCode: service.hdoCode,
-                titlePrimary: service.titlePrimary,
-                titleDetail: service.titleDetail,
-                entries: filteredEntries
-            )
-        }
-        guard var primaryDaily = services.first else { return payload }
-        var filtered = primaryDaily.entries
-
-        let dateFormatter = DateFormatter()
-        dateFormatter.calendar = calendar
-        dateFormatter.locale = .current
-        // 30日データのラベルに合わせて和暦風の年月日表記に統一する
-        dateFormatter.dateFormat = "yyyy年MM月dd日"
-        let todayLabel = dateFormatter.string(from: today)
-
-        let todayEntry = DailyUsageEntry(
-            dateLabel: todayLabel,
-            highText: String(format: "%.0fMB", todayMB),
-            lowText: nil,
-            note: nil,
-            hasData: true
-        )
-        filtered.append(todayEntry)
-
-        // 新しいエントリを日付降順で並べる
-        filtered.sort { lhs, rhs in
-            guard let lhsDate = parsedDate(from: lhs.dateLabel, calendar: calendar),
-                  let rhsDate = parsedDate(from: rhs.dateLabel, calendar: calendar) else {
-                return lhs.dateLabel > rhs.dateLabel
-            }
-            return lhsDate > rhsDate
-        }
-
-        primaryDaily = DailyUsageService(
-            hdoCode: primaryDaily.hdoCode,
-            titlePrimary: primaryDaily.titlePrimary,
-            titleDetail: primaryDaily.titleDetail,
-            entries: filtered
-        )
-        services[0] = primaryDaily
-
-        return AggregatePayload(
-            fetchedAt: payload.fetchedAt,
-            top: payload.top,
-            bill: payload.bill,
-            serviceStatus: payload.serviceStatus,
-            monthlyUsage: payload.monthlyUsage,
-            dailyUsage: services
-        )
-    }
-
-    private func isSameDay(label: String, reference: Date, calendar: Calendar) -> Bool {
-        guard let date = parsedDate(from: label, calendar: calendar) else { return false }
-        return calendar.isDate(date, inSameDayAs: reference)
-    }
-
-    private func resolveTotalCapacity(
-        primary: MemberTopResponse.ServiceInfo,
-        services: [MemberTopResponse.ServiceInfo]
-    ) -> Double {
-        let primaryCapacity = primary.totalCapacity ?? 0
-        guard let primaryCoupons = primary.couponData, !primaryCoupons.isEmpty else {
-            return primaryCapacity
-        }
-
-        let signature = couponSignature(primaryCoupons)
-        let matchedCapacities = services.compactMap { service -> Double? in
-            guard let coupons = service.couponData, !coupons.isEmpty,
-                  couponSignature(coupons) == signature else {
-                return nil
-            }
-            return service.totalCapacity
-        }
-        let total = matchedCapacities.reduce(0, +)
-        return total > 0 ? total : primaryCapacity
-    }
-
-    private func resolveCouponMetrics(
-        for service: MemberTopResponse.ServiceInfo,
-        calendar: Calendar
-    ) -> (remaining: Double, carryover: Double) {
-        guard let coupons = service.couponData, !coupons.isEmpty else {
-            return (service.remainingDataGB ?? 0, 0)
-        }
-
-        let now = Date()
-        let currentKey = monthKey(from: now, calendar: calendar)
-        let nextDate = calendar.date(byAdding: .month, value: 1, to: now) ?? now
-        let nextKey = monthKey(from: nextDate, calendar: calendar)
-
-        var remaining = 0.0
-        var carryover = 0.0
-        var matched = false
-
-        for entry in coupons {
-            let value = max(entry.couponValue ?? 0, 0)
-            guard let entryMonth = entry.month.flatMap(parseMonthKey) else {
-                remaining += value
-                matched = true
-                continue
-            }
-            guard entryMonth >= currentKey && entryMonth <= nextKey else { continue }
-            remaining += value
-            matched = true
-            if entryMonth == currentKey {
-                carryover += value
-            }
-        }
-
-        if !matched {
-            remaining = service.remainingDataGB ?? 0
-            carryover = 0
-        }
-
-        return (remaining: max(remaining, 0), carryover: max(carryover, 0))
-    }
-
-    private func monthKey(from date: Date, calendar: Calendar) -> Int {
-        let year = calendar.component(.year, from: date)
-        let month = calendar.component(.month, from: date)
-        return year * 100 + month
-    }
-
-    private func parseMonthKey(_ month: String) -> Int? {
-        let digits = month.filter { $0.isNumber }
-        guard digits.count >= 6, let value = Int(digits.prefix(6)) else { return nil }
-        return value
-    }
-
-    private func couponSignature(_ coupons: [MemberTopResponse.ServiceInfo.CouponEntry]) -> String {
-        let sorted = coupons.sorted { lhs, rhs in
-            let lhsSeq = lhs.sequenceNo ?? -1
-            let rhsSeq = rhs.sequenceNo ?? -1
-            if lhsSeq != rhsSeq {
-                return lhsSeq < rhsSeq
-            }
-            return (lhs.month ?? "") < (rhs.month ?? "")
-        }
-        return sorted.map { entry in
-            let sequence = entry.sequenceNo.map(String.init) ?? "-"
-            let month = entry.month ?? "-"
-            let value = entry.couponValue.map { String(format: "%.4f", $0) } ?? "-"
-            let adjustment = entry.adjustmentCoupon == true ? "1" : "0"
-            return "\(sequence):\(month):\(value):\(adjustment)"
-        }.joined(separator: "|")
-    }
-
-    private func parsedDate(from label: String, calendar: Calendar) -> Date? {
-        let regex = try? NSRegularExpression(pattern: "\\d+")
-        let nsString = label as NSString
-        let matches = regex?.matches(in: label, range: NSRange(location: 0, length: nsString.length)) ?? []
-        let segments = matches.compactMap { Int(nsString.substring(with: $0.range)) }
-
-        guard !segments.isEmpty else { return nil }
-
-        var year = calendar.component(.year, from: Date())
-        var month: Int?
-        var day: Int?
-
-        if segments.count >= 3 {
-            if let first = segments.first, first >= 1000 {
-                year = first
-                month = segments.dropFirst().first
-                day = segments.dropFirst(2).first
-            } else if let last = segments.last, last >= 1000 {
-                year = last
-                month = segments.first
-                day = segments.dropFirst().first
-            }
-        } else if segments.count == 2 {
-            month = segments[0]
-            day = segments[1]
-        } else if segments.count == 1 {
-            day = segments[0]
-        }
-
-        guard let month, let day else { return nil }
-
-        var components = DateComponents()
-        components.year = year
-        components.month = month
-        components.day = day
-        return calendar.date(from: components)
-    }
-
-    private func resolveMonthlyHighSpeedMB(
-        from payload: AggregatePayload,
-        year: Int,
-        month: Int,
-        calendar: Calendar
-    ) -> Double {
-        payload.monthlyUsage.reduce(0.0) { serviceSum, service in
-            serviceSum + service.entries.reduce(0.0) { entrySum, entry in
-                guard entry.hasData,
-                      let entryDate = parsedYearMonth(from: entry.monthLabel, calendar: calendar),
-                      calendar.component(.year, from: entryDate) == year,
-                      calendar.component(.month, from: entryDate) == month else {
-                    return entrySum
-                }
-                let roundedGB = max(entry.highSpeedGB ?? 0, 0)
-                let correctionGB = roundingCompensationGB(from: entry.highSpeedText)
-                return entrySum + (roundedGB + correctionGB) * 1024
-            }
-        }
-    }
-
-    private func roundingCompensationGB(from text: String?) -> Double {
-        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
-            return 0
-        }
-        let cleaned = text.replacingOccurrences(of: ",", with: "")
-        let numberPart = cleaned.prefix { character in
-            character.isNumber || character == "."
-        }
-        let parts = numberPart.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 2 else { return 0 }
-        let decimalDigits = parts[1].count
-        guard decimalDigits > 0 else { return 0 }
-        let step = pow(10.0, -Double(decimalDigits))
-        return step / 2
-    }
-
-    private func parsedYearMonth(from label: String, calendar: Calendar) -> Date? {
-        let regex = try? NSRegularExpression(pattern: "\\d+")
-        let nsString = label as NSString
-        let matches = regex?.matches(in: label, range: NSRange(location: 0, length: nsString.length)) ?? []
-        let segments = matches.compactMap { Int(nsString.substring(with: $0.range)) }
-
-        guard !segments.isEmpty else { return nil }
-
-        var year = calendar.component(.year, from: Date())
-        var month: Int?
-
-        if segments.count >= 2 {
-            if let first = segments.first, first >= 1000 {
-                year = first
-                month = segments.dropFirst().first
-            } else if let last = segments.last, last >= 1000 {
-                year = last
-                month = segments.first
-            } else {
-                month = segments.first
-            }
-        } else if segments.count == 1 {
-            month = segments.first
-        }
-
-        guard let month else { return nil }
-
-        var components = DateComponents()
-        components.year = year
-        components.month = month
-        components.day = 1
-        return calendar.date(from: components)
     }
 }

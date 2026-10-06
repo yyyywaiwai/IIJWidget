@@ -5,10 +5,10 @@ IIJWidget は、IIJ（Internet Initiative Japan）の残データ量、請求額
 
 - **主な技術スタック**: SwiftUI（UI）、WidgetKit（ウィジェット）、Combine/Async-Await（データフロー）、App Groups（共有データ）、App Groups 対応の Xcode プロジェクト。
 - **高レベルアーキテクチャ**:
-  1. **データフロー**: セキュアに認証情報を保存 → IIJAPIClient で生データを取得 → パーサー（DataUsageParser, BillDetailParser）で処理 → モデル（IIJModels, WidgetSharedModels）で構造化 → ViewModel（AppViewModel）で状態管理 → SwiftUI ビューで描画（チャート、タブ、オンboarding）。
+  1. **データフロー**: セキュアに認証情報を保存 → MyIIJmioAPIClient で生データを取得 → パーサー（DataUsageParser（30日表のみ））で処理 → モデル（IIJModels, WidgetSharedModels）で構造化 → ViewModel（AppViewModel）で状態管理 → SwiftUI ビューで描画（チャート、タブ、オンboarding）。
   2. **共有レイヤー**: `Shared/` にコアロジック（API、パース、ストレージ、アラート）を配置し、AppGroup.swift と AggregatePayloadStore.swift でアプリ-ウィジェット同期。
   3. **ウィジェット更新**: WidgetRefreshService.swift、RefreshWidgetIntent.swift、TimelineProvider（RemainingDataWidget.swift）でバックグラウンド更新。
-  4. **最近の機能**（コミットから）：アニメーション付きチャート（UsageChartCards.swift）、しきい値強調（使いすぎアラート）、ゼロデータ処理、非正クーポン fallback。
+  4. **最近の機能**（コミットから）：アニメーション付きチャート（UsageChartCards.swift）、しきい値強調（使いすぎアラート）、ゼロデータ処理、GAPI数値・回線IDへの正規化。
 - **ビルド/デプロイ**: GitHub Actions で PR 配布（Firebase）と TestFlight リリース。VSCode 統合（.vscode/launch.json）。
 
 ## ディレクトリ構造
@@ -39,11 +39,11 @@ Users/yyyywaiwai/IIJWidget/
 │   └── WidgetExtensionInfo.plist
 ├── Shared/                     # 共有フレームワーク/コード（アプリ + ウィジェット）
 │   ├── Helpers/
-│   ├── IIJAPIClient.swift      # API ネットワーキング
+│   ├── MyIIJmioAPIClient.swift      # API ネットワーキング
 │   ├── IIJModels.swift         # コアデータモデル
 │   ├── CredentialStore.swift   # セキュア認証情報（App Groups）
 │   ├── DataUsageParser.swift
-│   ├── BillDetailParser.swift
+│   ├── DailyUsageMerger.swift
 │   ├── ChartDataBuilder.swift  # チャート準備
 │   ├── WidgetRefreshService.swift
 │   ├── AggregatePayloadStore.swift
@@ -90,9 +90,9 @@ Users/yyyywaiwai/IIJWidget/
 - `/Users/yyyywaiwai/IIJWidget/IIJWidget/Model/CredentialsField.swift`: 認証情報 UI フィールド。
 
 ### サービス & パーサー
-- `/Users/yyyywaiwai/IIJWidget/Shared/IIJAPIClient.swift`: IIJ エンドポイント用 HTTP クライアント。
+- `/Users/yyyywaiwai/IIJWidget/Shared/MyIIJmioAPIClient.swift`: IIJ エンドポイント用 HTTP クライアント。
 - `/Users/yyyywaiwai/IIJWidget/Shared/DataUsageParser.swift`: 利用状況パース。
-- `/Users/yyyywaiwai/IIJWidget/Shared/BillDetailParser.swift`: 請求詳細パース。
+- `/Users/yyyywaiwai/IIJWidget/Shared/DailyUsageMerger.swift`: GAPIと30日表の回線照合・マージ。
 - `/Users/yyyywaiwai/IIJWidget/Shared/CredentialStore.swift`: セキュアストレージ。
 - `/Users/yyyywaiwai/IIJWidget/Shared/WidgetRefreshService.swift`: バックグラウンド更新。
 
@@ -111,7 +111,7 @@ Users/yyyywaiwai/IIJWidget/
 
 ## コアモジュール（最近のコミットに基づく）
 - **モデル**: IIJModels.swift（利用/請求構造体、ゼロデータ処理）。
-- **サービス**: IIJAPIClient.swift、パーサー（非正クーポン fallback）。
+- **サービス**: MyIIJmioAPIClient.swift、パーサー（GAPI数値・回線IDへの正規化）。
 - **UI**: タブビュー、DashboardCard.swift（タブレットアライメント）。
 - **チャート**: UsageChartCards.swift（アニメーション付きチャート）。
 - **使いすぎアラート**: UsageChartCards.swift / UsageListTab.swift（しきい値超過時の強調表示）。

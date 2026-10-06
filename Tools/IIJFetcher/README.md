@@ -1,158 +1,21 @@
-# IIJFetcher CLI
+# IIJFetcher
 
-IIJFetcher は IIJmio 会員サイトの非公開 API を直接叩き、通信量・請求情報・回線状態・月別/日別利用量を JSON で取得するための検証用 CLI です。ログイン後に以下のモードを選べます。
+アプリと同じGAPIクライアント・30日表クライアント・モデル・マージ処理を使う実通信検証CLIです。
+アプリ/Widgetの通常更新はGAPIのみで、30日表は利用量タブを開いた時だけ取得します。CLIは両経路をまとめて検証します。
+`Sources/IIJFetcher`の共有ファイルは`Shared/`への相対シンボリックリンクです。コピーを追加しないでください。
+旧会員サイトの残量・請求・契約・月次取得や旧CLIモードは削除済みです。
 
-> アプリ本体は MyIIJmio 公式アプリの GAPI を優先し、このCLIの会員サイト方式をフォールバックとして利用します。
-> GAPI の実通信・モデル変換検証は `Tools/frida/README.md` と `validate_gapi_live.swift` /
-> `validate_gapi_responses.swift` を参照してください。このCLIはフォールバック経路の独立検証用として維持します。
-
-- `--mode top` : `/api/member/top`（残量カードやクーポン情報）
-- `--mode bill` : `/api/member/getBillSummary`（最大 7 ヶ月分の請求サマリ）
-- `--mode status` : `/api/member/getServiceStatus`（各回線の稼働状態）
-- `--mode usage` : `/service/setup/hdc/viewmonthlydata/`（回線別の月別データ利用量テーブル）
-- `--mode daily` : `/service/setup/hdc/viewdailydata/`（直近 30 日の利用量と日別サマリ）
-- `--mode all` : 上記すべてを 1 つの `AggregatePayload`（`{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}`）にまとめて出力
-- `--mode bill-detail` : `/customer/bill/detail/`（請求番号または月を指定して内訳 HTML をパース）
-
-## 前提
-
-- Swift 6.2 以降 (Xcode 16 以降) — `Package.swift` の `swift-tools-version` に合わせてください
-- インターネット接続
-- IIJmio の mioID もしくは登録メールアドレスとパスワード
-
-## 使い方
-
-1. 環境変数で資格情報を渡すか、コマンドライン引数で指定します。
-
-```bash
-export IIJ_MIO_ID="mainaddress@example.com"
-export IIJ_PASSWORD="password"
-```
-
-2. 任意のモードでフェッチを実行します（デフォルトは `top`）。
-
-```bash
+```sh
 cd Tools/IIJFetcher
-swift run IIJFetcher --mode top
-swift run IIJFetcher --mode bill
-swift run IIJFetcher --mode status
-swift run IIJFetcher --mode usage
-swift run IIJFetcher --mode daily
-swift run IIJFetcher --mode all --mio-id mail@example.com --password pass
-swift run IIJFetcher --mode bill-detail --month 202510
-swift run IIJFetcher --mode bill-detail --bill-no 111005999429 --bill-no 111005999430
+swift test
+swift run IIJFetcher
 ```
 
-3. 成功するとそれぞれの API レスポンスがそのまま整形済み JSON で標準出力に流れます。
+CLI起動後に、標準入力の1行目へmioIDまたはメールアドレス、2行目へパスワードを入力します。
+端末入力は非表示です。コマンド引数に資格情報を含めないでください。
+成功時は`GAPI_30D_OK`と回線・請求・履歴件数のみを表示します。
+Bearer tokenはKeychainへ保存せず、Cookieは一時セッションに限定し、実レスポンスをデバッグストアへ保存しません。
+失敗時は非ゼロで終了し、取得済みの部分データを成功扱いしません。
 
-`--mode top` の例:
-
-```json
-{
-  "hasVouchers" : false,
-  "prefixList" : ["hdc","hdu"],
-  "serviceInfoList" : [
-    {
-      "planName" : "ギガプラン",
-      "serviceName" : "音声SIM",
-      "totalCapacity" : 10,
-      "couponData" : [
-        { "month" : "202512", "couponValue" : 6.83 }
-      ]
-    }
-  ],
-  "usagePeriod" : "9ヵ月"
-}
-```
-
-`--mode bill` の例:
-
-```json
-{
-  "billList" : [
-    { "month" : "202509", "totalAmount" : 904, "isUnpaid" : false },
-    { "month" : "202508", "totalAmount" : 904, "isUnpaid" : false }
-  ],
-  "isVoiceSim" : true,
-  "isImt" : false
-}
-```
-
-`--mode status` の例:
-
-```json
-{
-  "jmbNumberChangePossible" : false,
-  "serviceInfoList" : [
-    {
-      "planCode" : "CN1000",
-      "serviceCodePrefix" : "hdc",
-      "status" : "O",
-      "simInfoList" : [ { "simType" : "2", "status" : "O" } ]
-    }
-  ]
-}
-```
-
-`--mode usage` は HTML テーブルをパースして以下のような JSON を返します。
-
-```json
-[
-  {
-    "hdoCode": "hdc00000000",
-    "planName": "ギガプラン",
-    "entries": [
-      { "month": "202509", "inGB": 8.4, "outGB": 7.9 }
-    ]
-  }
-]
-```
-
-`--mode daily` は直近 30 日のサマリを次のような JSON で返します。
-
-```json
-[
-  {
-    "hdoCode": "hdc00000000",
-    "entries": [
-      { "date": "2025-09-08", "usedGB": 0.42 }
-    ]
-  }
-]
-```
-
-`--mode bill-detail` は `/customer/bill/detail/` の HTML をパースして内訳を返します。
-
-```json
-{
-  "monthText": "2025年10月利用分　請求金額（税込）",
-  "totalAmountText": "1,404円",
-  "totalAmount": 1404,
-  "taxBreakdowns": [
-    { "label": "総計（税抜）", "amountText": "1,277円" },
-    { "label": "10%対象（税抜）", "amountText": "1,277円", "taxLabel": "（消費税等）", "taxAmountText": "127円" }
-  ],
-  "sections": [
-    {
-      "title": "hdc71504454 mioモバイル（ギガプラン）（MVNOサービス）",
-      "items": [
-        { "title": "月額基本料(ギガプラン)", "detail": "( 2025/10/1〜2025/10/31 )", "quantityText": "1", "unitPriceText": "1,273円", "amountText": "1,273円" },
-        { "title": "ユニバーサルサービス料※", "detail": "( 1番号あたり3円のご請求となります )", "quantityText": "1", "unitPriceText": "3円", "amountText": "3円" }
-      ],
-      "subtotalText": "1,277円"
-    }
-  ]
-}
-```
-
-`--mode all` では `{"fetchedAt": ..., "top": ..., "bill": ..., "serviceStatus": ..., "monthlyUsage": [...], "dailyUsage": [...]}` という 1 つの JSON にまとまり、Swift アプリの `AggregatePayload` と互換です。
-
-失敗した場合は API 側のエラーコード（例: `ERROR_CODE_008`）もしくは HTTP ステータスを表示して終了します。
-
-## 実装メモ
-
-- ログインは `/api/member/login` に JSON で `mioId` / `password` を POST し、HttpOnly Cookie を取得します。
-- `URLSessionConfiguration.ephemeral`＋専用 Cookie ストアを使っているため、ブラウザセッションとは独立しています。
-- `usage`/`daily` モードは `viewmonthlydata` / `viewdailydata` のフォームをクロールし、`DataUsageHTMLParser` でテーブルを `MonthlyUsageService` / `DailyUsageService` モデルへ変換します。
-- `--mode all` の出力はアプリ/ウィジェットと同じ `AggregatePayload` をそのまま JSON 化したものです。
-- 詳細な API 一覧は `docs/iij_endpoints.md` を参照してください。
+`swift test`は匿名化fixtureで回線ID、GAPI数値、請求詳細キャッシュ、30日表パース、日付正規化、
+GAPI優先マージ、表の分離保存、30日取得の呼び出し経路、共有契約の重複排除、旧キャッシュ拒否を検証します。実通信は行いません。

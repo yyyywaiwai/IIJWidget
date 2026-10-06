@@ -6,7 +6,6 @@ struct RefreshWidgetIntent: AppIntent {
     static var title: LocalizedStringResource { "データ更新" }
     private let dataStore = WidgetDataStore()
     private let logStore = RefreshLogStore()
-    private let displayPreferenceStore = DisplayPreferencesStore()
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await updateRefreshingState(true)
@@ -14,7 +13,6 @@ struct RefreshWidgetIntent: AppIntent {
             Task { await updateRefreshingState(false) }
         }
 
-        let preferences = displayPreferenceStore.load()
         let refreshService = WidgetRefreshService()
         do {
             // 成功フラグをリセットしてから開始
@@ -25,7 +23,6 @@ struct RefreshWidgetIntent: AppIntent {
             }
 
             _ = try await refreshService.refreshForWidget(
-                calculateTodayFromRemaining: preferences.calculateTodayFromRemaining,
                 forceGAPIUpdate: true
             )
             

@@ -1,29 +1,50 @@
-# IIJmio 会員サイト API サマリ
+# IIJWidgetの取得方式
 
-## 通信方式の選択
+## 現行構成
 
-アプリの「設定」→「通信方式」で、次回更新に利用する方式を選択できる。
+残量・契約・請求・月次・直近の日次はGAPI専用。通信方式の選択、旧APIへのフォールバック、
+旧キャッシュのデコード互換は存在しない。会員サイトの利用は**30日履歴の表だけ**に限定する。
 
-- **新形式（MyIIJmioアプリ方式）**: `gapi.iijmio.jp` を本家MyIIJmioアプリと同じ認証・API形式で利用する。
-- **従来方式（会員サイト）**: 会員サイトのセッションCookieを利用する。
+更新ボタン・引っ張って更新・アプリ自動更新・Widgetの更新はGAPIのみ。
+30日表は利用量タブを開くたびに別途取得する。実行中のGAPI更新があれば、その完了を待ってから取得する。
+月別/日別の切り替えや、利用量タブ内の更新操作では表を取り直さない。
 
-選択値はApp GroupのUserDefaultsへ保存され、アプリ本体とウィジェットで共有される。選択した方式が失敗しても、もう一方の方式へ自動フォールバックはしない。
+| 取得対象 | クライアント / API |
+| --- | --- |
+| 認証・残量・回線 | `MyIIJmioAPIClient`: `/token`, `/lineInfo`, `/dataTraffic` |
+| 契約・請求明細 | GAPI `/contract`, `/usageFee` |
+| 月次・当月の日次 | GAPI `/pastDataTraffic`（回線ごと） |
+| 直近7日・当日実測 | GAPI `/dataTraffic` の `lastSevenDaysDataList` |
+| 過去30日の履歴 | `ThirtyDayUsageClient`: `/auth/login/`, `/api/member/login`, `/service/setup/hdc/viewdailydata/` のGET/POSTのみ |
 
-Chrome DevTools で取得した Nuxt バンドル（`/_nuxt/*.js`）と実際の通信結果を突き合わせ、会員トップ画面および関連メニューで利用されている代表的な `/api/*` エンドポイントを整理しました。ウィジェットや CLI から参照すべきデータソース選定の参考になります。
+30日取得のGETはフォームとCSRF取得用で、プレビュー値は使わない。POST表を解析し、GAPI回線IDへ
+一意に照合してから日付を正規化する。重複日の高速値はGAPIを優先し、欠損した低速値は30日表で補完する。
+日別が取得できない場合、残量からの推定値は作らない。
 
-| エンドポイント | メソッド | 期待リクエスト例 | 主なレスポンス項目 | 用途 / 備考 | 参照スクリプト |
-| --- | --- | --- | --- | --- | --- |
-| `/api/member/login` | POST | `{ "mioId": "<ID>", "password": "<PW>" }` | `{}` または `{ "error": "ERROR_CODE_xxx" }` | ログイン本体。実際には事前に `/auth/login/` を GET して WAF 用 Cookie を取得する必要がある。 | `entry.rL2vrYu7.js` |
-| `/api/front/loginInfo` | POST | `{}` | `{ "login_flg": true, "user_name": "…", "id_ma": "…", "webViewFlg": false }` | 軽量なログイン状態チェック。初回マウントや WebView 判定に利用。 | `entry.rL2vrYu7.js` |
-| `/api/member/getPermissionInfo` | POST | `{}` | `[("ID"), ("hdc"), …]` | 契約単位の権限一覧を取得し、表示可否や遷移ガードに使用。 | `entry.rL2vrYu7.js` |
-| `/api/member/getSuspensionInfo` | GET | なし | `{ "unpaidList": [], "suspensionDate": null, … }` | 延滞/利用停止情報取得。返却値が空でも JSON が返る。 | `entry.rL2vrYu7.js` |
-| `/api/member/top` | POST | `{}` または `{ "serviceCode": "hdc715…" }` | `serviceInfoList`, `billSummary`, `hasVouchers`, `usagePeriod`, 各種フラグ | 会員トップの主要データ源。`serviceInfoList[*].couponData` にデータ残量クーポンが入る。 | `index._cKtjdew.js` |
-| `/api/member/getServiceStatus` | GET | なし | `serviceInfoList[*].simInfoList`, `planCode`, `status`, `jmbNumberChangePossible` | 契約中回線の稼働状態や SIM タイプ一覧。ウィジェットで回線グルーピングする際に利用可。 | `service.xIX5mF4V.js` |
-| `/api/member/getBillSummary` | GET | なし | `billList[*].month`, `totalAmount`, `isUnpaid`, `isVoiceSim`, `isImt` | 料金・お支払いタブで表示される直近 7 ヶ月分の請求サマリ。 | `index.9w7tsc_m.js` |
-| `/customer/bill/detail/` | POST | `billNoList=111005999429&billNoList=...` | HTML (`bill-detail-top`, `bill-detail-table`, `bill-detail-tax`) | 請求タブの「ご請求明細を確認する」。`billNoList` を複数送ると複数計算書が合算される。 | `common.IV0QDYOx.js` |
-| `/api/front/getChatBotPopupToken` | GET | なし | `{ "token": "…", "popupSrc": "…" }` | 画面右下のカラクリチャット呼び出し用トークン。ウィジェットでは不要。 | `chatbot.RO5WKR_d.js` |
-| `/service/setup/hdc/viewmonthlydata/` | HTML (POST で CSRF 更新) | `hdoCode`, `_csrf` を含む form POST | `<table>` 形式で月別の高速/低速利用量 | 純粋な HTML 画面。API エンドポイントは存在せず、スクレイピングかヘッドレスブラウザでの取得が必要。 | 画面本体 |
-| `/service/setup/hdc/viewdailydata/` | HTML (GET + POST) | GET: 画面ロード。POST: `hdoCode`, `_csrf` | GET の `<div class="viewdata">` は直近 4 日分、POST の `<table>` は過去 30 日分 | 4 日プレビューに当日分が含まれる一方、POST 側は更新遅延で当日が欠落するケースがあるため、GET プレビューで得た行を `hdoCode` ごとにマージして利用する。設定の「当日利用量をデータ残量から計算する」トグルが ON の場合は GET プレビューをスキップし、POST 30 日分のみ取得した上で残量差分から当日分を補完する。 | 画面本体 / `DataUsageHTMLParser.previewDailyServices` |
+GAPIは保存tokenを使用し、401/403のみ資格情報で再ログインする。通信エラー・505・デコード失敗は
+そのまま失敗とし、30日側の認証や取得へ切り替えない。30日側のCookie失効も独立して再ログインする。
+30日取得や回線照合が失敗した場合は既存の表・GAPIキャッシュを保持し、取得済みのGAPI更新は取り消さない。
+
+## 保存モデル
+
+- `TrafficSummary.ServiceInfo.id` / 利用量の`lineID`: GAPIの`lineServiceCode`。契約コードだけでSIMをまとめない。
+- 残量・容量はGBの数値。クーポンの`sequenceNo`や旧`couponData`は持たない。
+- 月次GB / 日次MBは数値で保存し、表示文字列は計算プロパティ。日付を統一して重複日を排除する。
+- 請求詳細は`/usageFee`から変換して`billDetails`に保存。詳細を開くたびの再通信を省く。
+- `gapi.payload.v2`と`gapi.widget.snapshot.v2`のみ読み書き。旧形式からの移行はしない。
+- `dailyUsage`はGAPI日次、`thirtyDayUsage`は取得済みの30日表。表示用の`dailyUsageWithHistory`で統合し、通常更新では表を保持する。回線がなくなった場合は対応する表を破棄する。
+- `historyFetchedAt`はGAPI月次・契約・請求の取得日時。Widgetでは同日のGAPI履歴を再利用し、30日表の取得ではGAPIの更新日時を変えない。
+- 手入力で認証し直す際とログアウト時はtoken / Cookie / キャッシュを破棄し、別アカウントのデータ混在を防ぐ。
+
+## 検証
+
+`Tools/IIJFetcher`が本体の共有ソースを直接使用する。`swift test`は匿名化fixtureの検証、
+`swift run IIJFetcher`は標準入力の資格情報を使ったGAPI + 30日表の実通信検証。
+資格情報・token・レスポンス本文をCLIから保存・出力しない。
+
+## 過去のGAPI調査記録
+
+以下は2026-08-06の観測記録であり、現行実装では上記取得経路だけを使用する。
 
 ## MyIIJmio 公式アプリの GAPI
 
@@ -130,50 +151,4 @@ https://www.iijmio.jp/mobileappauth/signOn
 
 GAPI 共通クライアントは 400、401、403、404、429、500、502、503、505、598 を個別処理している。
 特に 505 は公式アプリの強制更新要求として扱われる。`appVersion` は認証契約の一部なので、3.2.5 の固定値は
-将来無効になる可能性がある。採用時はバージョン値を一か所に集約し、505 を検知したら安全に既存の会員サイト方式へ
-フォールバックできる設計にする。
-
-### IIJWidget へ採用する際の差分
-
-現行 `IIJAPIClient` は `https://www.iijmio.jp` の WAF/Cookie セッションを作り、JSON API と HTML
-スクレイピングを組み合わせている。GAPI を採用すると、次の置き換えが可能になる。
-
-- `/api/member/login` と Cookie セッションを `/token` と Bearer token に置き換える。
-- `/api/member/top` と日次・月次 HTML スクレイピングのデータ量部分を `/dataTraffic` と
-  `/pastDataTraffic` に置き換える。
-- `/api/member/getBillSummary` と請求 HTML の多くを `/usageFee` に置き換える。
-- `/api/member/getServiceStatus` を `/lineInfo` と `/contract` に置き換える。
-- widget extension は App Group Keychain の token と、main app が保存した回線選択情報を利用する。
-- 401/403 は token 失効、505 は appVersion 失効として区別し、main app での再ログインまたは旧方式への
-  フォールバックを行う。
-
-GAPI は公開仕様ではなく、フィールドや認証規則が予告なく変わる可能性がある。初期導入では現行方式を削除せず、
-GAPI 優先・会員サイト方式フォールバックとして段階的に移行するのが安全である。
-
-### IIJWidget の実装
-
-`MyIIJmioAPIClient` が `/token`、`/lineInfo`、`/dataTraffic`、`/contract`、`/usageFee`、
-`/pastDataTraffic` を担当する。取得結果は `MyIIJmioPayloadMapper` で既存の `AggregatePayload` に変換するため、
-アプリ本体とWidgetの表示モデルは従来どおり利用できる。
-
-Bearer tokenは `MyIIJmioTokenStore` により、資格情報とは別のApp Group Keychain項目へ
-`kSecAttrAccessibleAfterFirstUnlock` で保存する。ログアウト、認証エラー、公式アプリバージョン不一致ではtokenを削除する。
-
-`WidgetRefreshService` の取得順序は次のとおり。
-
-1. App Group Keychainに保存済みのGAPI token。
-2. KeychainのmioID・パスワードでGAPI `/token` に再ログイン。
-3. 画面で入力されたmioID・パスワードでGAPI `/token` にログイン。
-4. 保存済みの会員サイトCookieセッション。
-5. Keychain資格情報を使う従来の会員サイトログイン。
-6. 画面入力資格情報を使う従来の会員サイトログイン。
-
-GAPIの401/403では保存tokenを破棄して再ログインへ進む。505、通信エラー、デコードエラーを含むその他の失敗は
-tokenや資格情報をログへ出さず、従来方式へフォールバックする。請求詳細も `/usageFee` の `detailDataList` を優先し、
-該当明細がない場合だけ既存の請求HTML方式を使う。
-
-> **注記**
-> - 各 API は `https://www.iijmio.jp` 配下で提供され、セッションは Cookie ベース (JSESSIONID 等) です。
-> - 上記注記は「会員サイト API」に対するもの。MyIIJmio 公式アプリの GAPI は `https://gapi.iijmio.jp` と Bearer token を使う。
-> - `error` フィールドを含むレスポンスは全画面共通のエラーハンドラで扱われるため、クライアント側でも捕捉しておくと原因特定が容易になります。
-> - バンドル名は 2025-11-09 時点のもので、リリースにより変更される可能性があります。
+将来無効になる可能性がある。バージョン値は一か所に集約し、505では更新要求を表示する。旧方式へは切り替えない。

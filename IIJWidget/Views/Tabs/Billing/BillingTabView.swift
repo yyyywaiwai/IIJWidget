@@ -439,7 +439,7 @@ struct BillSummaryList: View {
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(entry.formattedMonth)
     .accessibilityValue(
-      isUnpaid ? "\(entry.formattedAmount)、未払い" : "\(entry.formattedAmount)、お支払い完了")
+      isUnpaid ? "\(entry.formattedAmount)、未払い" : "\(entry.formattedAmount)")
   }
 }
 

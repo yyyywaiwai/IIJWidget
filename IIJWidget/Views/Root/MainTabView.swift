@@ -25,7 +25,7 @@ struct MainTabView: View {
 
                 UsageListTab(
                     monthly: payload?.monthlyUsage ?? [],
-                    daily: payload?.dailyUsage ?? [],
+                    daily: payload?.dailyUsageWithHistory ?? [],
                     serviceStatus: payload?.serviceStatus,
                     accentColors: viewModel.accentColors,
                     usageAlertSettings: viewModel.usageAlertSettings,
@@ -56,6 +56,10 @@ struct MainTabView: View {
             }
             .toolbarBackground(.ultraThinMaterial, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
+        }
+        .task(id: selectedSection) {
+            guard selectedSection == .usage else { return }
+            await viewModel.refreshUsageHistory()
         }
     }
 

@@ -36,9 +36,11 @@ final class MyIIJmioAPIClient {
     private let tokenStore = MyIIJmioTokenStore()
     private let debugStore = DebugResponseStore.shared
     private let debugResponsesEnabled: Bool
+    private let persistSession: Bool
 
-    init(debugResponsesEnabled: Bool = true) {
+    init(debugResponsesEnabled: Bool = true, persistSession: Bool = true) {
         self.debugResponsesEnabled = debugResponsesEnabled
+        self.persistSession = persistSession
         let configuration = URLSessionConfiguration.ephemeral
         configuration.waitsForConnectivity = true
         configuration.timeoutIntervalForRequest = 45
@@ -58,12 +60,12 @@ final class MyIIJmioAPIClient {
         return try await fetchAll(session: authenticatedSession, forceUpdate: forceUpdate)
     }
 
-    func fetchTopUsingExistingSession(forceUpdate: Bool = false) async throws -> MemberTopResponse {
+    func fetchTopUsingExistingSession(forceUpdate: Bool = false) async throws -> (top: TrafficSummary, dailyUsage: [DailyUsageService]) {
         let storedSession = try loadStoredSession()
         return try await fetchTop(session: storedSession, forceUpdate: forceUpdate)
     }
 
-    func fetchTop(credentials: Credentials, forceUpdate: Bool = false) async throws -> MemberTopResponse {
+    func fetchTop(credentials: Credentials, forceUpdate: Bool = false) async throws -> (top: TrafficSummary, dailyUsage: [DailyUsageService]) {
         let authenticatedSession = try await login(credentials: credentials)
         return try await fetchTop(session: authenticatedSession, forceUpdate: forceUpdate)
     }
@@ -140,7 +142,7 @@ final class MyIIJmioAPIClient {
             appVersion: Self.officialAppVersion,
             createdAt: Date()
         )
-        try tokenStore.save(authenticatedSession)
+        if persistSession { try tokenStore.save(authenticatedSession) }
         return authenticatedSession
     }
 
@@ -199,7 +201,7 @@ final class MyIIJmioAPIClient {
     private func fetchTop(
         session authenticatedSession: MyIIJmioSession,
         forceUpdate: Bool
-    ) async throws -> MemberTopResponse {
+    ) async throws -> (top: TrafficSummary, dailyUsage: [DailyUsageService]) {
         let lineInfo: GAPILineInfoResponse = try await authenticatedRequest(
             session: authenticatedSession,
             path: "/lineInfo",
@@ -210,12 +212,15 @@ final class MyIIJmioAPIClient {
             session: authenticatedSession,
             path: "/dataTraffic",
             query: [
-                URLQueryItem(name: "dataDetailFlag", value: "0"),
+                URLQueryItem(name: "dataDetailFlag", value: "1"),
                 URLQueryItem(name: "mainLineServiceCode", value: mainLineServiceCode)
             ],
             forceUpdate: forceUpdate
         )
-        return MyIIJmioPayloadMapper.top(dataTraffic: dataTraffic, usageFee: nil)
+        return (
+            MyIIJmioPayloadMapper.top(dataTraffic: dataTraffic),
+            MyIIJmioPayloadMapper.mergeRecentUsage([], dataTraffic: dataTraffic, now: Date(), calendar: UsageDateLabel.calendar)
+        )
     }
 
     private func authenticatedRequest<Response: Decodable>(
@@ -298,7 +303,7 @@ final class MyIIJmioAPIClient {
         do {
             return try decoder.decode(Response.self, from: data)
         } catch {
-            if debugResponsesEnabled {
+            if debugResponsesEnabled, path != "/token" {
                 debugStore.appendResponse(
                     title: "GAPI decode failure",
                     path: path,
@@ -312,7 +317,7 @@ final class MyIIJmioAPIClient {
     }
 
     private func recordResponse(path: String, statusCode: Int, data: Data) {
-        guard debugResponsesEnabled else { return }
+        guard debugResponsesEnabled, path != "/token" else { return }
         let rawText = DebugPrettyFormatter.utf8String(from: data)
         debugStore.appendResponse(
             title: "GAPI \(statusCode)",
@@ -390,7 +395,8 @@ struct GAPIDataTraffic: Decodable {
                 )
             }
         }
-        return hdcLines + groupedLines
+        var seen = Set<String>()
+        return (hdcLines + groupedLines).filter { !$0.id.isEmpty && seen.insert($0.id).inserted }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -471,6 +477,7 @@ struct GAPIResolvedTrafficLine {
     let parentServiceCode: String?
     let parentPlanCode: String?
 
+    var id: String { lineServiceCode ?? serviceCode ?? "" }
     var serviceCode: String? { line.serviceCode ?? parentServiceCode }
     var lineServiceCode: String? { line.lineServiceCode }
     var planName: String? { line.planName ?? parentPlanCode }
@@ -802,103 +809,70 @@ enum MyIIJmioPayloadMapper {
         usageFee: GAPIUsageFeeResponse,
         pastTraffic: [GAPIPastTrafficResult],
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = UsageDateLabel.calendar
     ) -> AggregatePayload {
-        AggregatePayload(
+        let billing = bill(usageFee: usageFee)
+        return AggregatePayload(
             fetchedAt: now,
-            top: top(dataTraffic: dataTraffic, usageFee: usageFee),
-            bill: bill(usageFee: usageFee),
+            top: top(dataTraffic: dataTraffic),
+            bill: billing,
             serviceStatus: serviceStatus(contract: contract, dataTraffic: dataTraffic),
             monthlyUsage: monthlyUsage(from: pastTraffic, now: now, calendar: calendar),
-            dailyUsage: dailyUsage(from: pastTraffic, now: now, calendar: calendar)
+            dailyUsage: mergeRecentUsage(
+                dailyUsage(from: pastTraffic, now: now, calendar: calendar),
+                dataTraffic: dataTraffic, now: now, calendar: calendar
+            ),
+            billDetails: Dictionary(billing.billList.compactMap { entry in
+                guard let detail = billDetail(entry: entry, usageFee: usageFee) else { return nil }
+                return (entry.id, detail)
+            }, uniquingKeysWith: { _, last in last })
         )
     }
 
     static func top(
-        dataTraffic: GAPIDataTrafficResponse,
-        usageFee: GAPIUsageFeeResponse?
-    ) -> MemberTopResponse {
+        dataTraffic: GAPIDataTrafficResponse
+    ) -> TrafficSummary {
         let services = dataTraffic.dataTraffic.resolvedLines.map { resolved in
             let line = resolved.line
             let current = line.thisMonthDataList
-            let expireEntries = line.expireList.enumerated().map { index, entry in
-                MemberTopResponse.ServiceInfo.CouponEntry(
-                    adjustmentCoupon: false,
-                    sequenceNo: index,
-                    month: expirationMonth(year: entry.expireYear, month: entry.expireMonth),
-                    couponValue: amountInGigabytes(entry.remainingDataTraffic, unit: entry.dataUnit)
-                )
-            }
-            let fallbackCoupon: [MemberTopResponse.ServiceInfo.CouponEntry]
-            if expireEntries.isEmpty {
-                fallbackCoupon = [
-                    MemberTopResponse.ServiceInfo.CouponEntry(
-                        adjustmentCoupon: false,
-                        sequenceNo: 0,
-                        month: nil,
-                        couponValue: amountInGigabytes(
-                            current?.availableDataTraffic ?? line.couponValue,
-                            unit: current?.availableDataTrafficUnit
-                        )
-                    )
-                ]
-            } else {
-                fallbackCoupon = expireEntries
-            }
-
-            return MemberTopResponse.ServiceInfo(
-                dataShareNotCovered: current?.dataShare == 0,
-                serviceCode: resolved.serviceCode ?? resolved.lineServiceCode,
+            let remaining = amountInGigabytes(current?.availableDataTraffic, unit: current?.availableDataTrafficUnit)
+                ?? (line.expireList.isEmpty ? line.couponValue : line.expireList.reduce(0) {
+                    $0 + (amountInGigabytes($1.remainingDataTraffic, unit: $1.dataUnit) ?? 0)
+                })
+            return TrafficSummary.ServiceInfo(
+                id: resolved.id,
+                serviceCode: resolved.serviceCode,
+                groupServiceCode: line.groupServiceCode,
                 totalCapacity: amountInGigabytes(current?.maxDataTraffic, unit: current?.maxDataTrafficUnit),
-                dataShareExistence: current?.dataShare == 1,
+                remainingDataGB: remaining.map { max($0, 0) },
                 planName: resolved.planName,
-                chargePlan: current?.maxDataTraffic.map { compactNumber($0) },
-                serviceName: resolved.planName,
-                phoneNo: line.telNo ?? line.msIsdn,
-                couponData: fallbackCoupon
+                phoneNo: line.telNo ?? line.msIsdn
             )
         }
-        let billSummary = usageFee.map {
-            MemberTopResponse.BillSummary(
-                amount: $0.billingTotalAmount,
-                miowari: nil,
-                month: $0.billingMonth
-            )
-        }
-        let prefixes = Set(services.compactMap { $0.serviceCode.map { String($0.prefix(3)) } }).sorted()
-        let hasVouchers = services.contains { ($0.remainingDataGB ?? 0) > 0 }
-        let usagePeriod = dataTraffic.dataTraffic.resolvedLines.compactMap { $0.line.thisMonthDataList?.usePeriod }.first
-        return MemberTopResponse(
-            serviceInfoList: services,
-            billSummary: billSummary,
-            hasVouchers: hasVouchers,
-            usagePeriod: usagePeriod,
-            prefixList: prefixes
-        )
+        return TrafficSummary(serviceInfoList: services)
     }
 
     static func bill(usageFee: GAPIUsageFeeResponse) -> BillSummaryResponse {
         let entries = usageFee.billingSummary.map { summary in
             BillSummaryResponse.BillEntry(
-                billNoList: summary.billingNo.map { [$0] },
+                billingNumber: summary.billingNo,
                 month: normalizedYearMonth(summary.billingMonth),
                 totalAmount: integerAmount(summary.billingTotalAmount),
-                usedPoint: nil,
                 isUnpaid: nil
             )
         }
-        return BillSummaryResponse(billList: entries, isVoiceSim: nil, isImt: nil)
+        return BillSummaryResponse(billList: entries)
     }
 
     static func billDetail(
         entry: BillSummaryResponse.BillEntry,
         usageFee: GAPIUsageFeeResponse
     ) -> BillDetailResponse? {
-        let expectedBillNumbers = Set(entry.billNoList ?? [])
+        let expectedBillNumber = entry.billingNumber
         let expectedMonth = normalizedYearMonth(entry.month)
         guard let summary = usageFee.billingSummary.first(where: { candidate in
-            if let number = candidate.billingNo, expectedBillNumbers.contains(number) {
-                return true
+            if let number = candidate.billingNo, let expectedBillNumber {
+                return number == expectedBillNumber
             }
             return normalizedYearMonth(candidate.billingMonth) == expectedMonth
         }) else {
@@ -937,9 +911,8 @@ enum MyIIJmioPayloadMapper {
         let trafficLines = dataTraffic.dataTraffic.resolvedLines
         let statuses = trafficLines.map { trafficLine in
             let matchingContract = contract.contract.allLines.first { contractLine in
-                if let lineServiceCode = trafficLine.lineServiceCode,
-                   contractLine.lineServiceCode == lineServiceCode {
-                    return true
+                if let lineServiceCode = trafficLine.lineServiceCode {
+                    return contractLine.lineServiceCode == lineServiceCode
                 }
                 return contractLine.serviceCode == trafficLine.serviceCode
             }
@@ -951,6 +924,7 @@ enum MyIIJmioPayloadMapper {
                 simType = nil
             }
             return ServiceStatusResponse.ServiceStatus(
+                id: trafficLine.id,
                 simInfoList: [
                     ServiceStatusResponse.ServiceStatus.SimInfo(
                         simType: simType,
@@ -958,13 +932,11 @@ enum MyIIJmioPayloadMapper {
                     )
                 ],
                 serviceCodePrefix: trafficLine.serviceCode.map { String($0.prefix(3)) },
-                stopDate: nil,
                 planCode: matchingContract?.chargePlan ?? trafficLine.parentPlanCode,
-                isBic: nil,
                 status: status
             )
         }
-        return ServiceStatusResponse(serviceInfoList: statuses, jmbNumberChangePossible: nil)
+        return ServiceStatusResponse(serviceInfoList: statuses)
     }
 
     static func monthlyUsage(
@@ -976,14 +948,14 @@ enum MyIIJmioPayloadMapper {
             let entries = result.response.lastFiveMonthInfo.map { entry in
                 MonthlyUsageEntry(
                     monthLabel: formattedYearMonth(entry.month, now: now, calendar: calendar),
-                    highText: joinedAmount(entry.dataTraffic, unit: result.response.lastFiveMonthDataUnit),
-                    lowText: nil,
+                    highSpeedGB: amountInGigabytes(Double(entry.dataTraffic ?? ""), unit: result.response.lastFiveMonthDataUnit),
+                    lowSpeedGB: nil,
                     note: nil,
                     hasData: entry.dataTraffic != nil
                 )
             }
             return MonthlyUsageService(
-                hdoCode: result.line.serviceCode ?? result.line.lineServiceCode ?? UUID().uuidString,
+                lineID: result.line.id,
                 titlePrimary: result.line.planName ?? "IIJmio回線",
                 titleDetail: result.line.line.telNo ?? result.line.line.msIsdn,
                 entries: entries
@@ -1004,14 +976,14 @@ enum MyIIJmioPayloadMapper {
                 let day = Int(entry.date ?? "") ?? 1
                 return DailyUsageEntry(
                     dateLabel: String(format: "%04d年%02d月%02d日", year, month, day),
-                    highText: joinedAmount(entry.dataTraffic, unit: entry.dataTrafficUnit),
-                    lowText: nil,
+                    highSpeedMB: amountInGigabytes(Double(entry.dataTraffic ?? ""), unit: entry.dataTrafficUnit ?? "MB").map { $0 * 1024 },
+                    lowSpeedMB: nil,
                     note: entry.dayOfWeek,
                     hasData: entry.dataTraffic != nil
                 )
             }
             return DailyUsageService(
-                hdoCode: result.line.serviceCode ?? result.line.lineServiceCode ?? UUID().uuidString,
+                lineID: result.line.id,
                 titlePrimary: result.line.planName ?? "IIJmio回線",
                 titleDetail: result.line.line.telNo ?? result.line.line.msIsdn,
                 entries: entries
@@ -1019,22 +991,46 @@ enum MyIIJmioPayloadMapper {
         }
     }
 
+    static func mergeRecentUsage(
+        _ history: [DailyUsageService],
+        dataTraffic: GAPIDataTrafficResponse,
+        now: Date,
+        calendar: Calendar
+    ) -> [DailyUsageService] {
+        dataTraffic.dataTraffic.resolvedLines.map { line in
+            var entries = history.first { $0.lineID == line.id }?.entries ?? []
+            if let recent = line.line.lastSevenDaysDataList {
+                for day in recent.dailyDataList {
+                    guard let month = Int(day.month ?? ""), (1...12).contains(month),
+                          let date = Int(day.date ?? ""), (1...31).contains(date) else { continue }
+                    let label = String(format: "%04d年%02d月%02d日",
+                                       resolvedYear(forMonth: month, now: now, calendar: calendar), month, date)
+                    let entry = DailyUsageEntry(
+                        dateLabel: label,
+                        highSpeedMB: amountInGigabytes(Double(day.high ?? ""), unit: recent.lastSevenDaysDataHighUnit ?? "MB").map { $0 * 1024 },
+                        lowSpeedMB: amountInGigabytes(Double(day.low ?? ""), unit: recent.lastSevenDaysDataLowUnit ?? "MB").map { $0 * 1024 },
+                        note: day.dayOfWeek,
+                        hasData: day.high != nil || day.low != nil
+                    )
+                    if entry.hasData {
+                        entries.removeAll { $0.dateLabel == label }
+                        entries.append(entry)
+                    }
+                }
+            }
+            return DailyUsageService(lineID: line.id, titlePrimary: line.planName ?? "IIJmio回線",
+                                     titleDetail: line.line.telNo ?? line.line.msIsdn,
+                                     entries: entries.sorted { $0.dateLabel > $1.dateLabel })
+        }
+    }
+
     private static func amountInGigabytes(_ value: Double?, unit: String?) -> Double? {
-        guard let value else { return nil }
+        guard let value, value.isFinite, value >= 0 else { return nil }
         let normalized = unit?.uppercased() ?? "GB"
         if normalized.contains("TB") { return value * 1024 }
         if normalized.contains("MB") { return value / 1024 }
         if normalized.contains("KB") { return value / (1024 * 1024) }
         return value
-    }
-
-    private static func expirationMonth(year: String?, month: String?) -> String? {
-        guard let year, let month, let monthValue = Int(month) else { return nil }
-        return String(format: "%@%02d", year, monthValue)
-    }
-
-    nonisolated private static func compactNumber(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(value)
     }
 
     private static func integerAmount(_ raw: String?) -> Int? {
@@ -1072,11 +1068,6 @@ enum MyIIJmioPayloadMapper {
         let currentMonth = calendar.component(.month, from: now)
         let currentYear = calendar.component(.year, from: now)
         return month > currentMonth ? currentYear - 1 : currentYear
-    }
-
-    private static func joinedAmount(_ value: String?, unit: String?) -> String? {
-        guard let value else { return nil }
-        return value + (unit ?? "")
     }
 
     nonisolated private static func currencyText(_ value: Double) -> String {

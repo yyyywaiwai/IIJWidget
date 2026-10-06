@@ -519,13 +519,13 @@ struct ServiceStatusList: View {
           if let simList = item.simInfoList {
             HStack(spacing: AppSpacing.sm) {
               ForEach(simList) { sim in
-                let isActive = sim.status == "O"
+                let isActive = sim.status == "利用中"
                 HStack(spacing: AppSpacing.xs) {
                   Image(
                     systemName: isActive ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
                   )
                   .font(.system(size: 12))
-                  Text(sim.simType ?? "?")
+                  Text([sim.simType, sim.status].compactMap { $0 }.joined(separator: "・"))
                     .font(.system(.caption, design: .rounded, weight: .medium))
                 }
                 .foregroundStyle(isActive ? Color.green : Color.orange)
@@ -537,7 +537,7 @@ struct ServiceStatusList: View {
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(sim.simType ?? "SIM")
-                .accessibilityValue(isActive ? "利用中" : "要確認")
+                .accessibilityValue(sim.status ?? "状態未取得")
               }
             }
           }

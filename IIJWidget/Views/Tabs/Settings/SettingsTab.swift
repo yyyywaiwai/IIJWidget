@@ -19,23 +19,6 @@ struct SettingsTab: View {
 
     var body: some View {
         Form {
-            Section {
-                Picker("データ取得方式", selection: Binding(
-                    get: { viewModel.communicationMethod },
-                    set: viewModel.updateCommunicationMethod
-                )) {
-                    ForEach(CommunicationMethod.allCases) { method in
-                        Text(method.displayName)
-                            .tag(method)
-                    }
-                }
-                .pickerStyle(.inline)
-            } header: {
-                Text("通信方式")
-            } footer: {
-                Text("\(viewModel.communicationMethod.explanation) 次回のデータ更新から反映され、別方式への自動切替は行いません。")
-            }
-
             Section(header: HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("使いすぎアラート")
                 InfoTipButton(
@@ -124,21 +107,6 @@ struct SettingsTab: View {
                         set: { viewModel.updateShowsBillingChart($0) }
                     )) {
                         Text("請求タブのグラフを表示")
-                    }
-                    .toggleStyle(.switch)
-                    .tint(accentColor)
-
-                    Toggle(isOn: Binding(
-                        get: { viewModel.displayPreferences.calculateTodayFromRemaining },
-                        set: { viewModel.updateCalculateTodayFromRemaining($0) }
-                    )) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("当日利用量をデータ残量から計算する")
-                            InfoTipButton(
-                                message: calculateTodayHintText,
-                                accessibilityLabel: "当日利用量計算のヒント"
-                            )
-                        }
                     }
                     .toggleStyle(.switch)
                     .tint(accentColor)
@@ -419,7 +387,6 @@ private struct InfoTipPopover: View {
 }
 
 private let usageAlertHintText = "設定したMBを超えると、月別/日別のグラフと一覧が警告色で強調表示されます。"
-private let calculateTodayHintText = "ONにすると日別の取得は30日表のみとなり、当日分はデータ残量の差分から補完します。"
 private let repositoryHintText = "このアプリはオープンソースです。MITライセンスの規約に従って自由にコードを利用できます"
 private let debugResponseHintText = "直近のAPIレスポンスをキャッシュから確認できます。"
 private let refreshLogHintText = "更新の実行履歴と結果を確認できます。"

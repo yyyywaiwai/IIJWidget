@@ -24,7 +24,7 @@ struct HomeDashboardTab: View {
 
             UsageChartSwitcher(
               monthlyServices: payload.monthlyUsage,
-              dailyServices: payload.dailyUsage,
+              dailyServices: payload.dailyUsageWithHistory,
               accentColors: accentColors,
               usageAlertSettings: usageAlertSettings,
               defaultChart: defaultUsageChart,
@@ -192,7 +192,7 @@ struct UsageChartSwitcher: View {
 }
 
 struct HomeOverviewHeader: View {
-  let serviceInfoList: [MemberTopResponse.ServiceInfo]
+  let serviceInfoList: [TrafficSummary.ServiceInfo]
   let latestBillAmount: String?
   let accentColors: AccentColorSettings
   let hidePhoneOnScreenshot: Bool
@@ -220,7 +220,7 @@ struct HomeOverviewHeader: View {
 }
 
 struct ServiceInfoCard: View {
-  let info: MemberTopResponse.ServiceInfo
+  let info: TrafficSummary.ServiceInfo
   let latestBillAmount: String?
   let accentColors: AccentColorSettings
   let hidePhoneOnScreenshot: Bool

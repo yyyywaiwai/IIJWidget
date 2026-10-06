@@ -1,12 +1,12 @@
 # IIJWidget
 
-IIJWidget は IIJmio 会員サイトの非公開 API を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報は端末のキーチェーンと App Group コンテナに保存され、アプリとウィジェットの双方で安全に共有されます。
+IIJWidget は MyIIJmio の GAPI（非公開 API） を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報とBearer tokenは共有キーチェーンに保存され、アプリとウィジェットの双方で安全に共有されます。
 
 ## 特徴
-- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。最新月または任意の月をタップすると請求明細 (サプライ料・通話料などの内訳) も確認でき、右上の「最新取得」ボタンから `WidgetRefreshService` による一括更新をいつでも実行できます。設定の表示セクションに「当日利用量をデータ残量から計算する」トグルを追加しており、ON にすると日別取得が POST 30 日分のみになり、残量差分から当日分を補完します。
+- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。最新月または任意の月をタップすると請求明細 (サプライ料・通話料などの内訳) も確認でき、右上の「最新取得」ボタンからGAPIによる一括更新をいつでも実行できます。当日を含む日別実測値はGAPI、30日表は利用量タブを開くたびに取得します。旧方式切替・取得フォールバック・残量差分による当日推定は削除しました。
 - **ウィジェット拡張 (`RemainingDataWidget/`)**: ロック画面アクセサリ (Inline/Circular/Rectangular) とシステム Small/Medium を備え、App Intents (`RefreshWidgetIntent`) を使った手動リフレッシュと 30 分ごとの自動更新を両立。`WidgetDataStore` のスナップショット共有でオフライン時も最新値を表示します。
-- **共有レイヤー (`Shared/`)**: `IIJAPIClient`、`DataUsageParser`、`WidgetRefreshService`、`CredentialStore`、`WidgetDataStore` を App Group 経由で共有し、アプリ・ウィジェット・CLI が同じ `AggregatePayload` とセッションを扱えるようにしています。
-- **CLI ツール (`Tools/IIJFetcher`)**: SwiftPM 製の `IIJFetcher` が `--mode top|bill|status|usage|daily|bill-detail|all` をサポート。`--mode all` は `{"fetchedAt","top","bill","serviceStatus","monthlyUsage","dailyUsage"}` 形式でまとめて取得でき、環境変数 (`IIJ_MIO_ID` / `IIJ_PASSWORD`) でも資格情報を渡せます。
+- **共有レイヤー (`Shared/`)**: `MyIIJmioAPIClient`、`ThirtyDayUsageClient`、`DataUsageParser`、`WidgetRefreshService`、`CredentialStore`、`WidgetDataStore` を App Group 経由で共有し、アプリ・ウィジェットが同じ数値モデルとキャッシュを扱います。CLIも共有ソースを直接ビルドし、認証情報やレスポンスは保存しません。
+- **CLI ツール (`Tools/IIJFetcher`)**: GAPIと30日表の実通信検証。資格情報は標準入力から読み、成功時は件数だけを表示します。旧取得モードはありません。
 - **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要エンドポイントとレスポンス項目を整理。API のパラメータやペイロードを更新したら README / docs / CLI を必ず同期します。
 
 ## ディレクトリ構成
@@ -33,26 +33,24 @@ docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
 5. CLI で API を確認する場合:
    ```bash
    cd Tools/IIJFetcher
-   # すべてのデータをまとめて取得
-   swift run IIJFetcher --mode all --mio-id <ID> --password <PW>
-
-   # 個別 API
-   swift run IIJFetcher --mode top      # /api/member/top
-   swift run IIJFetcher --mode bill     # /api/member/getBillSummary
-   swift run IIJFetcher --mode status   # /api/member/getServiceStatus
-   swift run IIJFetcher --mode usage    # /service/setup/hdc/viewmonthlydata/
-   swift run IIJFetcher --mode daily    # /service/setup/hdc/viewdailydata/
-   # 個別請求明細 (最新月 or --month YYYYMM / --bill-no <番号>)
-   swift run IIJFetcher --mode bill-detail --month 202510
-   swift run IIJFetcher --mode bill-detail --bill-no 111005999429
+   swift run IIJFetcher
+   # プロンプトなしでID、パスワードを各1行ずつ入力（端末では非表示）
    ```
-   `IIJ_MIO_ID` / `IIJ_PASSWORD` 環境変数でも資格情報を渡せ、`--mode all` は `fetchedAt/top/bill/serviceStatus/monthlyUsage/dailyUsage` を 1 つの JSON に含めます。
+   GAPIと30日表の取得・回線照合・マージを検証します。資格情報をコマンド引数に渡さないでください。
+
+## データ管理
+- 残量はGAPIの数値、回線識別は`lineServiceCode`を使用し、同一契約の複数SIMを区別します。
+- 利用量はGB/MBの数値だけを保存し、表示文字列とIDの重複保存を廃止しました。日付は統一表記に正規化します。
+- `/usageFee`の請求詳細を同じキャッシュに保持し、詳細表示時の再取得を省きます。
+- 新キャッシュは`gapi.payload.v2` / `gapi.widget.snapshot.v2`。旧キャッシュの読み込み・変換は行わず初回に再取得します。
+- 更新ボタン・引っ張って更新・自動更新・WidgetはGAPIだけを取得します。Widgetは同日のGAPI月次・契約・請求を再利用し、日付・回線構成が変わるとGAPI全体を取得します。
+- 30日表は利用量タブを開いた時だけ取得し、`thirtyDayUsage`にGAPIの日次と分けて保存します。通常更新では現存する回線の表を保持し、表示時にGAPI優先で統合します。表の取得失敗はGAPI更新を失敗させません。
 
 ## ビルド & テスト
-- リリースビルド (CI 想定): `xcodebuild -scheme IIJWidget -configuration Release`
-- シミュレータ検証: `xcodebuild -scheme IIJWidget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build`
+- リリースビルド (CI 想定): `xcodebuild -scheme MioWIdget -configuration Release`
+- シミュレータ検証: `xcodebuild -scheme MioWIdget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build`
 - CLI のテスト (SwiftPM): `cd Tools/IIJFetcher && swift test`
-- 実機/シミュレータ動作確認: Xcode で `IIJWidget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
+- 実機/シミュレータ動作確認: Xcode で `MioWIdget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
 
 ## CI / Firebase App Distribution
 PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.0 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
@@ -79,11 +77,11 @@ PR を `main` ブランチへ作成または更新すると、`.github/workflows
 - API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。
 - `Shared/CredentialStore.swift` は App Group 付きの Keychain へ資格情報を退避し、既存ユーザーの移行や CLI/Widget からの再利用を自動化しています。
 - `WidgetRefreshService` と `WidgetSnapshot+Payload.swift` で `AggregatePayload` を `WidgetDataStore` のスナップショットへ変換し、`RefreshWidgetIntent` 実行時は `isRefreshing` フラグを同期します。ウィジェット更新ロジックを変更する場合は併せて見直してください。
-- `Shared/DataUsageParser.swift` は `viewmonthlydata` / `viewdailydata` HTML から共通モデルを生成します。会員サイトのフォームやテーブル構造が変わった場合はここを更新してください。
+- `Shared/DataUsageParser.swift` は 30日表の `viewdailydata` HTML から共通モデルを生成します。会員サイトのフォームやテーブル構造が変わった場合はここを更新してください。
 
 ## セキュリティ上の注意
 - 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。
-- 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`IIJAPIClient` のログで HTTP ステータスや `error` コードを確認してください。
+- 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`MyIIJmioAPIClient` / `ThirtyDayUsageClient` のログで HTTP ステータスや `error` コードを確認してください。
 
 ## ライセンス
 © 2025 yyyywaiwai. 本プロジェクトは [MIT License](./LICENSE) の下で提供されます。
