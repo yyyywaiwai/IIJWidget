@@ -123,36 +123,15 @@ struct RemainingDataWidgetEntryView: View {
   private var widgetContent: some View {
     switch family {
     case .accessoryCircular:
-      lockScreenRefreshWrapper {
-        circularView
-      }
+      circularView
     case .accessoryInline:
-      lockScreenRefreshWrapper {
-        inlineView
-      }
+      inlineView
     case .accessoryRectangular:
-      lockScreenRefreshWrapper {
-        rectangularView
-      }
+      rectangularView
     case .systemSmall:
       smallView
     default:
       mediumView
-    }
-  }
-
-  @ViewBuilder
-  private func lockScreenRefreshWrapper<Content: View>(
-    @ViewBuilder content: @escaping () -> Content
-  ) -> some View {
-    if #available(iOSApplicationExtension 17.0, *) {
-      Button(intent: RefreshWidgetIntent()) {
-        RefreshPulseContainer(isRefreshing: isRefreshing, content: content)
-      }
-      .buttonStyle(.plain)
-      .contentShape(Rectangle())
-    } else {
-      content()
     }
   }
 
@@ -585,31 +564,6 @@ private struct RefreshSymbol: View {
   private var glyph: some View {
     Image(systemName: "arrow.clockwise")
       .font(.caption)
-  }
-}
-
-@available(iOSApplicationExtension 17.0, *)
-private struct RefreshPulseContainer<Content: View>: View {
-  let isRefreshing: Bool
-  let content: () -> Content
-
-  var body: some View {
-    if isRefreshing {
-      TimelineView(.periodic(from: .now, by: 0.9)) { context in
-        content()
-          .opacity(opacity(for: context.date))
-      }
-    } else {
-      content()
-    }
-  }
-
-  private func opacity(for date: Date) -> Double {
-    let cycle: Double = 0.9
-    let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
-    // triangle wave between 0.5 and 1.0
-    let triangle = phase <= 0.5 ? phase * 2 : (1 - phase) * 2
-    return 0.5 + (triangle * 0.5)
   }
 }
 
