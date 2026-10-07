@@ -50,6 +50,7 @@ struct MonthlyUsageChartCard: View {
     }
     .onAppear {
       rebuildPoints()
+      triggerBarAnimation()
     }
     .onChange(of: services) {
       rebuildPoints()
@@ -359,6 +360,7 @@ struct DailyUsageChartCard: View {
     }
     .onAppear {
       rebuildPoints()
+      triggerBarAnimation()
     }
     .onChange(of: services) {
       rebuildPoints()
