@@ -367,7 +367,7 @@ struct OnboardingCredentialSetupStep: View {
             switch result {
             case .success:
                 onFinish()
-            case .failure(let error):
+            case .failure:
                 loginErrorMessage = "ログインに失敗しました。IDとパスワードを確認してください。"
             }
         }

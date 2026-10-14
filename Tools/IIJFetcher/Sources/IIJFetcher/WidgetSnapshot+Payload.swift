@@ -1,0 +1,1 @@
+../../../../Shared/WidgetSnapshot+Payload.swift

@@ -1,87 +1,165 @@
 # IIJWidget
 
-IIJWidget は MyIIJmio の GAPI（非公開 API） を利用して高速通信量・請求サマリ・回線状態を取得し、SwiftUI アプリと iOS 17 以降のウィジェットで直感的に可視化する非公式ツールセットです。資格情報とBearer tokenは共有キーチェーンに保存され、アプリとウィジェットの双方で安全に共有されます。
+IIJWidget は MyIIJmio の GAPI（非公開 API）を利用して、残データ量・請求・回線状態・通信量を表示する非公式の iOS / iPadOS アプリです。SwiftUI アプリと WidgetKit 拡張でデータを共有し、ローカル通知とショートカットによる更新にも対応しています。
+
+Xcode プロジェクト名は `IIJWidget`、**アプリのターゲット／スキーム名は `MioWIdget`**、生成されるアプリは `MioWidget.app` です。
 
 ## 特徴
-- **SwiftUI アプリ (`IIJWidget/`)**: ホーム／利用量／請求／設定タブで `AggregatePayload` の残量・請求・回線状態・月別/日別利用量をカードと Swift Charts で可視化。最新月または任意の月をタップすると請求明細 (サプライ料・通話料などの内訳) も確認でき、右上の「最新取得」ボタンからGAPIによる一括更新をいつでも実行できます。当日を含む日別実測値はGAPI、30日表は利用量タブを開くたびに取得します。旧方式切替・取得フォールバック・残量差分による当日推定は削除しました。
-- **ウィジェット拡張 (`RemainingDataWidget/`)**: ロック画面アクセサリ (Inline/Circular/Rectangular) とシステム Small/Medium を備え、App Intents (`RefreshWidgetIntent`) を使った手動リフレッシュと 30 分ごとの自動更新を両立。`WidgetDataStore` のスナップショット共有でオフライン時も最新値を表示します。
-- **共有レイヤー (`Shared/`)**: `MyIIJmioAPIClient`、`ThirtyDayUsageClient`、`DataUsageParser`、`WidgetRefreshService`、`CredentialStore`、`WidgetDataStore` を App Group 経由で共有し、アプリ・ウィジェットが同じ数値モデルとキャッシュを扱います。CLIも共有ソースを直接ビルドし、認証情報やレスポンスは保存しません。
-- **CLI ツール (`Tools/IIJFetcher`)**: GAPIと30日表の実通信検証。資格情報は標準入力から読み、成功時は件数だけを表示します。旧取得モードはありません。
-- **ドキュメント (`docs/`)**: `iij_endpoints.md` に主要エンドポイントとレスポンス項目を整理。API のパラメータやペイロードを更新したら README / docs / CLI を必ず同期します。
+
+- **アプリ**: ホーム／利用量／請求／設定の各タブで、残量・月別／日別利用量・請求明細をカードと Swift Charts で表示します。手動更新・引っ張って更新・通常の自動更新は GAPI を使います。
+- **補助的な30日履歴**: 利用量タブを開いた時にだけ30日表を取得します。GAPI の日次データとは分離して保存し、表示時に GAPI の値を優先して統合します。表の取得に失敗しても、保持済みの GAPI データは破棄しません。
+- **ウィジェット**: ホーム画面の Small／Medium と、ロック画面の Inline／Circular／Rectangular に対応します。ホーム画面では手動更新、ロック画面ではタップによるアプリ起動を提供します。自動更新は約30分後の再取得を WidgetKit に要求しますが、実行時刻は iOS が決めます。
+- **共有ロジック**: API 通信・レスポンス変換・キャッシュ方針・スナップショット・通知判定を `Shared/` に集約しています。資格情報と Bearer token は共有 Keychain、表示用キャッシュと設定は App Group で共有します。
+- **CLI とテスト**: `Tools/IIJFetcher` は本番ソースへの相対シンボリックリンクを利用します。実通信 CLI と、匿名化したデータによるネットワーク非依存のユニットテストを分けています。
 
 ## ディレクトリ構成
+
 ```text
-IIJWidget/           # メインアプリ (タブ UI、ViewModel、オンボーディング、Assets、entitlements)
-RemainingDataWidget/ # WidgetKit エクステンションと App Intents / タイムライン定義
-Shared/              # API クライアント、CredentialStore、WidgetRefreshService、DataUsageParser などの共有コード
-Tools/IIJFetcher/    # SwiftPM ベースの fetch CLI と HTML パーサ
-IIJWidget.xcodeproj  # アプリ/ウィジェット各ターゲットを束ねる Xcode プロジェクト
-docs/                # API 仕様や補助資料 (例: iij_endpoints.md)
+IIJWidget/                  # アプリのエントリ、状態管理、SwiftUI 画面、App Intents
+  ViewModel/                # AppViewModel、AppLoadState、RefreshCoordinator
+  Views/Tabs/               # Home / Usage / Billing / Settings の機能別コンポーネント
+RemainingDataWidget/        # Provider、表示用変換、サイズ別 View、更新操作
+Shared/                     # API・モデル・ストレージ・更新方針・通知・タイムライン計算
+Tools/IIJFetcher/           # 実通信 CLI と共有ソースの SwiftPM テスト
+Tools/validate.sh           # リンク整合性・ユニット／構造テスト・ビルドの一括実行
+Tests/                      # 共有ソースリンクとチャート復帰処理の構造テスト
+IIJWidget.xcodeproj/        # MioWIdget / RemainingDataWidget ターゲットと共有スキーム
+docs/                       # 構成・責務・API の資料
+.github/workflows/          # PR / main 更新の Discord 通知
 ```
 
+責務の境界、更新の流れ、変更時に守る条件は [プロジェクト構造](docs/PROJECT-STRUCTURE.md) にまとめています。
+
 ## 動作要件
-- macOS 14.5 以降 / Xcode 16 以降（CI では Xcode 26.0、Swift 6.2 ツールチェーン。`Tools/IIJFetcher` は `swift-tools-version: 6.2` を要求します）
-- iOS 17 以降の実機またはシミュレータ。
-- IIJmio の mioID（または登録メールアドレス）とパスワード
-- App Group および Keychain Sharing 設定（`Shared/AppGroup.swift` の `identifier` を自身の App Group ID に更新し、両ターゲットの entitlements に追加してください）
+
+- iOS / iPadOS 17 以降の実機またはシミュレータ。
+- iOS SDK と Swift 6.2 以降を備えた Xcode。`Tools/IIJFetcher/Package.swift` は `swift-tools-version: 6.2` を指定しています。
+- CLI パッケージの対象は macOS 13 以降です。開発用 Mac の必要 OS は、利用する Xcode の対応条件に従ってください。このリポジトリに独立した macOS アプリターゲットはありません。
+- 実データを取得する場合は IIJmio の mioID（または登録メールアドレス）とパスワード。
+- App Group と Keychain Sharing の設定。
 
 ## セットアップ手順
-1. リポジトリを取得: `git clone https://github.com/yyyywaiwai/IIJWidget.git && cd IIJWidget`。
-2. Xcode で `IIJWidget.xcodeproj` を開き、`Signing & Capabilities` で App Group / Keychain Sharing を有効化。`Shared/AppGroup.swift` の `group.jp.yyyywaiwai.miowidgetgroup` を自身の App Group ID に更新し、両ターゲットの entitlements と一致させます。
-3. アプリをビルドして起動するとオンボーディングが表示されるので、注意事項に同意後、資格情報を入力して保存します。保存後は設定タブまたは画面右上の「最新取得」で `WidgetRefreshService` による残量/請求/回線状態/利用量の一括取得を実行できます。
-4. ウィジェットを追加する場合は、端末の Home/Lock 画面で「IIJWidget」を選び、アクセサリ／Small／Medium の好きなサイズを追加してください。ウィジェットは 30 分おきに `WidgetDataStore` から更新し、`RefreshWidgetIntent` ボタンで手動リフレッシュが可能です。
-5. CLI で API を確認する場合:
+
+1. リポジトリを取得します。
    ```bash
-   cd Tools/IIJFetcher
-   swift run IIJFetcher
-   # プロンプトなしでID、パスワードを各1行ずつ入力（端末では非表示）
+   git clone https://github.com/yyyywaiwai/IIJWidget.git
+   cd IIJWidget
    ```
-   GAPIと30日表の取得・回線照合・マージを検証します。資格情報をコマンド引数に渡さないでください。
+2. Xcode で `IIJWidget.xcodeproj` を開き、`MioWIdget` と `RemainingDataWidget` の署名設定を確認します。`Shared/AppGroup.swift` の App Group ID と両ターゲットの entitlements を一致させ、App Group / Keychain Sharing を有効にしてください。
+3. スキーム `MioWIdget` でビルドして起動し、オンボーディングで資格情報を保存します。右上の「最新取得」または各タブの引っ張って更新で GAPI を取得できます。
+4. Home／Lock 画面にウィジェットを追加します。手動更新ボタンはホーム画面用です。ロック画面のウィジェットはアプリを開きます。
+5. CLI で実通信を確認する場合は、次を実行します。
+   ```bash
+   swift run --package-path Tools/IIJFetcher IIJFetcher
+   # プロンプトなしで ID、パスワードを各1行ずつ入力（端末では非表示）
+   ```
+   GAPI と30日表の取得・回線照合・マージを検証します。資格情報をコマンド引数へ渡さないでください。詳細は [IIJFetcher README](Tools/IIJFetcher/README.md) を参照してください。
 
 ## データ管理
-- 残量はGAPIの数値、回線識別は`lineServiceCode`を使用し、同一契約の複数SIMを区別します。
-- 利用量はGB/MBの数値だけを保存し、表示文字列とIDの重複保存を廃止しました。日付は統一表記に正規化します。
-- `/usageFee`の請求詳細を同じキャッシュに保持し、詳細表示時の再取得を省きます。
-- 新キャッシュは`gapi.payload.v2` / `gapi.widget.snapshot.v2`。旧キャッシュの読み込み・変換は行わず初回に再取得します。
-- 更新ボタン・引っ張って更新・自動更新・WidgetはGAPIだけを取得します。Widgetは同日のGAPI月次・契約・請求を再利用し、日付・回線構成が変わるとGAPI全体を取得します。
-- 30日表は利用量タブを開いた時だけ取得し、`thirtyDayUsage`にGAPIの日次と分けて保存します。通常更新では現存する回線の表を保持し、表示時にGAPI優先で統合します。表の取得失敗はGAPI更新を失敗させません。
 
-## ビルド & テスト
-- リリースビルド (CI 想定): `xcodebuild -scheme MioWIdget -configuration Release`
-- シミュレータ検証: `xcodebuild -scheme MioWIdget -destination 'platform=iOS Simulator,name=iPhone 16e,OS=26.0' build`
-- CLI のテスト (SwiftPM): `cd Tools/IIJFetcher && swift test`
-- 実機/シミュレータ動作確認: Xcode で `MioWIdget` または `RemainingDataWidget` スキームを選択し、App Group・Widget タイムライン・`RefreshWidgetIntent` が正しく動作するか確認してください。
+- 残量は GAPI の数値、回線識別は `lineServiceCode` を使用し、同一契約の複数 SIM を区別します。
+- 利用量は GB / MB の数値として保存し、表示文字列と日付 ID はモデルから導出します。日付は統一表記に正規化します。
+- `/usageFee` の請求詳細を `AggregatePayload.billDetails` に保持し、キャッシュにある明細の再取得を省きます。
+- キャッシュキーは `gapi.payload.v2` / `gapi.widget.snapshot.v2` です。旧形式キャッシュの読み込み・変換はせず、再取得します。
+- ウィジェットの通常更新では、条件が合えば同日の月次・契約・請求情報を再利用し、残量・当日利用量だけを取得します。日付・回線構成の変更、強制更新、有効な月間通知しきい値がある場合は全体取得へ切り替えます。この方針は `PayloadRefreshPolicy` にまとめています。
+- 30日表は `thirtyDayUsage` に分離保存します。通常更新では現存する回線の履歴だけを保持し、`DailyUsageMerger` が GAPI 優先で表示用に統合します。残量差分から当日利用量を推定しません。
+- アプリの更新要求は `RefreshCoordinator` が調整します。同じ目的の更新が実行中なら合流し、別の目的の更新は必要に応じて順番に実行します。ログアウト時に進行中の処理と待機中の処理を無効化し、旧セッションの結果が画面へ戻るのを防ぎます。
 
-## CI / Firebase App Distribution
-PR を `main` ブランチへ作成または更新すると、`.github/workflows/pr-firebase-distribution.yml` が自動で走り、Xcode 26.0 の `IIJWidget` Release アーカイブを生成して Firebase App Distribution にアップロードし、完了後に Discord Webhook へインストールリンクを投稿します (ドラフト PR はスキップ)。
+## 使いすぎ通知とショートカット
 
-### 必要な GitHub Secrets
-| Secret 名 | 用途 |
+設定の「使いすぎアラート」を有効にし、日次／月次の正のしきい値（MB）を入力して通知を許可してください。
+アプリ・ホーム画面ウィジェットの手動更新、ウィジェットの自動更新、ショートカットによるGAPI更新の成功時に、
+当日／当月の取得済み高速・低速使用量の合計を回線ごとに判定します。30日表の取得だけでは通知しません。
+
+- ショートカットアプリのMioWidgetに **「データを更新して使いすぎを確認」** を追加できます。アプリを開かずに更新し、ウィジェットも再読み込みします。先にアプリでログインと通知許可を済ませてください。
+- **「データを取得」** は最新データをJSONテキストで返します。後続の「入力から辞書を取得」で、`top.serviceInfoList`（残量・容量はGB）、`dailyUsage`（MB）、`monthlyUsage`（GB）、`bill`などを利用できます。取得日時はISO 8601形式です。更新・ウィジェット再読み込み・使いすぎ通知も実行します。通知未許可でもデータは取得できます。
+- 取得結果には電話番号・契約・請求情報を含むため、「データを取得」は端末の認証を必要とします。パスワードや認証トークンは含みません。出力を外部送信するショートカットの共有先には注意してください。`thirtyDayUsage`は既存キャッシュがある場合だけ含まれ、このアクションでは再取得しません。
+- iOSのローカル通知を使用し、Firebase・APNsサーバーや資格情報の外部保存は追加しません。
+- 通知はアカウント・回線ごとに日次／月次それぞれ1回。日本時間で期間を区切り、通知済み記録をApp Groupで共有します。しきい値変更やOFF→ONでは同じ期間の通知を繰り返しません。
+- 月間しきい値が有効な場合、ウィジェット更新でも月次データを取得するため、通常よりAPIリクエストが増えます。欠測・古い期間・モックデータは通知対象外です。
+- 通知が拒否されている場合もグラフの警告表示は有効です。設定画面からiOSの通知設定を開けます。通知登録の失敗は更新履歴に残し、データ更新自体は成功として扱います。
+- 常時監視ではありません。ウィジェット更新やショートカット実行がない間は検知せず、通知の表示時刻は集中モードなどの設定にも左右されます。
+
+## ビルドと検証
+
+リポジトリのルートで実行します。
+
+```bash
+Tools/validate.sh          # Debug が既定
+Tools/validate.sh Debug
+Tools/validate.sh Release
+```
+
+スクリプトは次を順に実行し、失敗した時点で終了します。
+
+1. `Tests/test_shared_source_links.py`：CLI が本番ソースを相対リンクで参照していることを確認。
+2. `swift test --package-path Tools/IIJFetcher`：モデル、変換、HTTP モック、更新制御、通知・ウィジェット計算などのテスト。
+3. `Tests/test_usage_chart_lifecycle.py`：タブ復帰時に棒グラフのアニメーションが再開する構造を確認。
+4. `git diff --check`：差分の空白エラーを確認。
+5. `xcodebuild -scheme MioWIdget -configuration Debug` または `Release`：アプリとウィジェットをビルド。詳細出力は `build.log` に保存。
+
+個別に実行する場合は次のコマンドを使います。
+
+```bash
+swift test --package-path Tools/IIJFetcher
+python3 Tests/test_shared_source_links.py
+python3 Tests/test_usage_chart_lifecycle.py
+xcodebuild -scheme MioWIdget -configuration Debug > build.log 2>&1
+xcodebuild -scheme MioWIdget -configuration Release > build.log 2>&1
+```
+
+シミュレータを指定する場合は、先に利用可能な destination を確認します。端末名や OS バージョンを固定して想定しないでください。
+
+```bash
+xcodebuild -scheme MioWIdget -showdestinations
+# 表示されたシミュレータの ID を指定
+xcodebuild -scheme MioWIdget -configuration Debug \
+  -destination 'platform=iOS Simulator,id=SIMULATOR_ID' build
+```
+
+### 検証結果の区別
+
+| 検証 | 確認できる範囲 | 別途確認する範囲 |
+| --- | --- | --- |
+| SwiftPM テスト | 匿名化データによる計算、変換、更新制御、HTTP モック応答 | 現在の IIJmio API、実アカウントの認証 |
+| 構造テスト | 本番ソースとのリンク、チャート復帰処理の存在 | 実際の描画やアニメーション |
+| Xcode ビルド | アプリ／拡張のコンパイルと構成 | インストール、画面表示、通知配信 |
+| モック UI | `MockPayloadProvider` の固定データによる各タブ、明細、設定、タブ復帰 | GAPI 実通信、実アカウントの値、使いすぎ通知 |
+| 実機・実アカウント | ログイン、実データ取得、App Group / Keychain 共有、Widget 操作、通知・ショートカット | 他端末・他アカウント・将来の実行時刻 |
+
+モック UI は `Shared/MockPayloadProvider.swift` の `credentials` で起動できます。モック更新は実通信と通知判定を行いません。既存アカウントの保存状態に影響するため、検証用シミュレータや専用の環境で利用してください。
+
+UI 変更時はホーム→別タブ→ホームの復帰、日別／月別、請求明細の月切替、設定の保存・復帰を確認してください。実機でのウィジェットや通知は、ビルド成功・モック表示・純粋ロジックのテスト成功とは分けて記録します。
+
+## GitHub Actions と配布
+
+現在リポジトリにあるワークフローは **Discord 通知のみ**です。ファイル名には以前の配布経路名が残っています。
+
+| ファイル | 実際の処理 |
 | --- | --- |
-| `ASC_API_KEY_ID` | App Store Connect API Key の Key ID |
-| `ASC_API_KEY_ISSUER_ID` | App Store Connect API Key の Issuer ID |
-| `ASC_API_KEY_P8` | App Store Connect API Key (`.p8`) を Base64 化した文字列 |
-| `APPLE_TEAM_ID` | Apple Developer Team ID (例: `ABCDE12345`) |
-| `FIREBASE_APP_ID` | Firebase App Distribution の iOS App ID (`1:1234567890:ios:abcdef`) |
-| `FIREBASE_SERVICE_ACCOUNT` | App Distribution API 用サービスアカウント JSON 全文 |
-| `FIREBASE_DISTRIBUTION_GROUPS` | 配布先のグループをカンマ区切りで指定 (不要なら空にできます) |
-| `FIREBASE_DISTRIBUTION_TESTERS` | 個別テスターのメールアドレス (グループ未使用時に利用) |
-| `DISCORD_WEBHOOK_URL` | 成果物リンクを通知する Discord Webhook URL |
+| `.github/workflows/pr-firebase-distribution.yml` | `main` 向け PR の作成／更新など、または手動実行を Discord に通知。ドラフト PR は除外 |
+| `.github/workflows/release-testflight.yml` | `main` への push、または手動実行を Discord に通知 |
 
-`EXPORT_METHOD` はデフォルトで `development` に設定しています。AdHoc や Enterprise で配布する場合は workflow の `env` を任意のメソッドへ変更してください。Firebase へのアップロードが成功すると、`wzieba/Firebase-Distribution-Github-Action` の出力を使って Discord に `[Install build](...)` の埋め込みメッセージが送信されます。コード署名は Xcode の Automatically manage signing と App Store Connect API Key (Cloud Signing) で行うため、`.p8` キーを Secrets に登録すれば証明書やプロビジョニングプロファイルを配布する必要はありません。
+これらは Xcode ビルド、ユニットテスト、Firebase App Distribution へのアップロード、TestFlight への送信を実行しません。検証は `Tools/validate.sh` などで別途実行し、配布は署名・アーカイブ・アップロードの手順を個別に管理してください。
 
-### Firebase SDK について
-アプリ本体・ウィジェット共に Firebase App SDK を利用していないため、`GoogleService-Info.plist` の設置や CI での復元手順は不要です。Firebase 関連の Secrets は App Distribution 用 (`FIREBASE_APP_ID` / `FIREBASE_SERVICE_ACCOUNT` など) のみ設定してください。
+現在の通知処理で設定する Secret は `DISCORD_WEBHOOK_URL` です。GitHub API 参照には Actions の `GITHUB_TOKEN` を使用します。App Store Connect / Firebase の配布用 Secret をこの通知ワークフローのために登録する必要はありません。
+
+アプリ本体・ウィジェットは Firebase SDK を利用していないため、`GoogleService-Info.plist` は不要です。
 
 ## 開発メモ
-- API 仕様の詳細は `docs/iij_endpoints.md` を参照し、エンドポイントやレスポンス構造を変更した際は README・CLI・ドキュメントを同時に更新します。
-- `Shared/CredentialStore.swift` は App Group 付きの Keychain へ資格情報を退避し、既存ユーザーの移行や CLI/Widget からの再利用を自動化しています。
-- `WidgetRefreshService` と `WidgetSnapshot+Payload.swift` で `AggregatePayload` を `WidgetDataStore` のスナップショットへ変換し、`RefreshWidgetIntent` 実行時は `isRefreshing` フラグを同期します。ウィジェット更新ロジックを変更する場合は併せて見直してください。
-- `Shared/DataUsageParser.swift` は 30日表の `viewdailydata` HTML から共通モデルを生成します。会員サイトのフォームやテーブル構造が変わった場合はここを更新してください。
+
+- API のエンドポイントやペイロードを変更したら、[API 資料](docs/iij_endpoints.md)、共有モデル・変換処理、CLI とテストを同時に更新します。
+- HTTP 処理は `GAPIHTTPClient`、レスポンス型は `GAPIResponseModels`、画面用モデルへの変換は `MyIIJmioPayloadMapper`、認証とエンドポイントの組み立ては `MyIIJmioAPIClient` が担います。
+- `WidgetSnapshot`、`WidgetDataStore`、`WidgetSnapshot+Payload`、`WidgetTimelineSchedule` はモデル・保存・変換・時間計算を分担します。WidgetKit に依存しない計算は SwiftPM から検証します。
+- `Tools/IIJFetcher/Sources/IIJFetcher` に共有コードのコピーを追加しないでください。`Shared/` または対象の本番ファイルへの相対シンボリックリンクを追加します。
+- `DataUsageParser` は30日表の HTML 専用です。GAPI の通常取得へ HTML 取得フォールバックを追加しないでください。
 
 ## セキュリティ上の注意
-- 資格情報や API トークンをリポジトリに含めないでください。`.gitignore` によってユーザー固有の設定ファイルは除外済みです。
-- 非公式の内部 API を使用しているため、IIJmio 側の仕様変更により予告なく動作しなくなる可能性があります。`MyIIJmioAPIClient` / `ThirtyDayUsageClient` のログで HTTP ステータスや `error` コードを確認してください。
+
+- 資格情報・API トークン・個人の実レスポンスをリポジトリへ含めないでください。`.gitignore` は保護の補助であり、コミット前に差分を確認します。
+- アプリのデバッグ画面・レスポンスキャッシュ・「データを取得」の出力には電話番号や請求情報などが含まれます。スクリーンショットやログの共有時は内容を確認してください。CLI は資格情報を標準入力で受け取り、トークンや実レスポンスを永続化しません。
+- 非公開 API のため、IIJmio 側の仕様変更で動作が変わる可能性があります。テスト成功だけで実サービスとの互換性を判断しないでください。
 
 ## ライセンス
+
 © 2025 yyyywaiwai. 本プロジェクトは [MIT License](./LICENSE) の下で提供されます。

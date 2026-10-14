@@ -36,6 +36,22 @@ final class GAPIDataTests: XCTestCase {
         let encoded = try JSONEncoder().encode(payload)
         let restored = try decoder.decode(AggregatePayload.self, from: encoded)
         XCTAssertEqual(restored.dailyUsage, payload.dailyUsage)
+        // ショートカットの出力は辞書へ変換でき、日付はISO 8601、数値は数値のまま返す。
+        let shortcutJSON = try XCTUnwrap(DebugPrettyFormatter.prettyJSONString(payload))
+        let shortcutData = Data(shortcutJSON.utf8)
+        let shortcutObject = try XCTUnwrap(JSONSerialization.jsonObject(with: shortcutData) as? [String: Any])
+        XCTAssertNotNil(ISO8601DateFormatter().date(from: try XCTUnwrap(shortcutObject["fetchedAt"] as? String)))
+        let shortcutTop = try XCTUnwrap(shortcutObject["top"] as? [String: Any])
+        let shortcutLines = try XCTUnwrap(shortcutTop["serviceInfoList"] as? [[String: Any]])
+        XCTAssertEqual(shortcutLines.first?["remainingDataGB"] as? Double, 7.5)
+        let shortcutDecoder = JSONDecoder()
+        shortcutDecoder.dateDecodingStrategy = .iso8601
+        let shortcutPayload = try shortcutDecoder.decode(AggregatePayload.self, from: shortcutData)
+        XCTAssertEqual(shortcutPayload.dailyUsage, payload.dailyUsage)
+        XCTAssertEqual(shortcutPayload.monthlyUsage, payload.monthlyUsage)
+        for secret in ["password", "accessToken", "refreshToken", "credentials"] {
+            XCTAssertFalse(shortcutJSON.contains("\"\(secret)\":"))
+        }
         let text = String(decoding: encoded, as: UTF8.self)
         for removed in ["couponData", "sequenceNo", "hdoCode", "highSpeedText", "billNoList", "jmbNumberChangePossible"] {
             XCTAssertFalse(text.contains(removed))

@@ -1,17 +1,9 @@
 import Combine
 import Foundation
-import SwiftUI
 import WidgetKit
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    enum LoadState {
-        case idle
-        case loading(previous: AggregatePayload?)
-        case loaded(AggregatePayload)
-        case failed(String, lastPayload: AggregatePayload?)
-    }
-
     enum RefreshTrigger {
         case automatic
         case manual
@@ -24,9 +16,9 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var credentialFieldsHidden = false
     @Published private(set) var lastLoginSource: WidgetRefreshService.LoginSource?
     @Published private(set) var hasStoredCredentials = false
-    @Published var accentColors: AccentColorSettings = .default
-    @Published var displayPreferences: DisplayPreferences = .default
-    @Published var usageAlertSettings: UsageAlertSettings = .default
+    @Published private(set) var accentColors: AccentColorSettings = .default
+    @Published private(set) var displayPreferences: DisplayPreferences = .default
+    @Published private(set) var usageAlertSettings: UsageAlertSettings = .default
 
     private let credentialStore = CredentialStore()
     private let widgetRefreshService = WidgetRefreshService()
@@ -36,11 +28,8 @@ final class AppViewModel: ObservableObject {
     private let usageAlertStore = UsageAlertStore()
     private let refreshLogStore = RefreshLogStore()
 
-    /// 実行中の更新タスク。SwiftUI の `.refreshable` は自身の Task を
-    /// キャンセルすることがあり、構造化された子タスクのまま通信すると
-    /// URLSession まで伝播して -999 (キャンセルしました) になる。
-    /// ViewModel 側で非構造化 Task として保持し、呼び出し元は完了を待つだけにする。
-    private var inFlightRefresh: (trigger: RefreshTrigger, task: Task<Result<Void, Error>, Never>)?
+    private let refreshCoordinator = RefreshCoordinator<RefreshTrigger>()
+    private var sessionGeneration = UUID()
     private var lastAutomaticRefresh: Date?
 
     init() {
@@ -148,7 +137,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func refreshUsageHistory() async {
-        if currentPayload() == nil {
+        if state.payload == nil {
             guard case .success = await refresh(trigger: .automatic) else { return }
         }
         _ = await refresh(trigger: .usageTab)
@@ -167,7 +156,9 @@ final class AppViewModel: ObservableObject {
 
     func logout() throws {
         try credentialStore.delete()
-        inFlightRefresh?.task.cancel()
+        sessionGeneration = UUID()
+        refreshCoordinator.cancel()
+        lastAutomaticRefresh = nil
         mioId = ""
         password = ""
         credentialFieldsHidden = false
@@ -178,34 +169,31 @@ final class AppViewModel: ObservableObject {
     }
 
     /// 更新の入口。既に実行中なら二重に走らせず、その完了を待って同じ結果を返す。
-    /// 実際の通信は `inFlightRefresh` の中 (非構造化 Task) で行うので、
+    /// 実際の通信は `RefreshCoordinator` の中 (非構造化 Task) で行うので、
     /// 呼び出し元 (引っ張って更新) がキャンセルされても取得処理は最後まで走り切る。
     @discardableResult
     func refresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
-        while let inFlight = inFlightRefresh {
-            let result = await inFlight.task.value
-            // 同じ更新は相乗り。GAPI更新と30日表取得は互いの完了を待って別々に実行する。
-            if trigger == inFlight.trigger || (trigger == .automatic && inFlight.trigger != .usageTab) { return result }
-        }
-        guard !Task.isCancelled else { return .failure(CancellationError()) }
-        guard trigger != .usageTab || currentPayload() != nil else { return .failure(CancellationError()) }
-
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return Result<Void, Error>.failure(CancellationError()) }
-            defer { self.inFlightRefresh = nil }
+        await refreshCoordinator.run(
+            trigger: trigger,
+            canJoin: { trigger == .automatic && $0 != .usageTab }
+        ) { [weak self] in
+            guard let self, trigger != .usageTab || self.state.payload != nil else {
+                return .failure(CancellationError())
+            }
             return await self.performRefresh(trigger: trigger)
         }
-        inFlightRefresh = (trigger, task)
-        return await task.value
     }
 
     private func performRefresh(trigger: RefreshTrigger) async -> Result<Void, Error> {
-        let previousPayload = currentPayload()
+        let generation = sessionGeneration
+        let previousPayload = state.payload
         state = .loading(previous: previousPayload)
 
         do {
             if trigger == .usageTab {
-                state = .loaded(try await widgetRefreshService.refreshUsageHistory())
+                let payload = try await widgetRefreshService.refreshUsageHistory()
+                try validateSession(generation)
+                state = .loaded(payload)
             } else {
                 let manualCredentials = currentManualCredentials()
                 let forceManualLogin = manualCredentials != nil && !credentialFieldsHidden
@@ -217,6 +205,7 @@ final class AppViewModel: ObservableObject {
                     allowKeychainFallback: !forceManualLogin,
                     forceGAPIUpdate: trigger == .manual
                 )
+                try validateSession(generation)
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
                 state = .loaded(outcome.payload)
                 lastLoginSource = outcome.loginSource
@@ -228,6 +217,8 @@ final class AppViewModel: ObservableObject {
             )
             return .success(())
         } catch {
+            // An earlier account's completion must never replace the new session's UI.
+            guard generation == sessionGeneration else { return .failure(CancellationError()) }
             // キャンセルはユーザーに見せるべき失敗ではないので、
             // バナーもログも出さずに直前の状態へ戻す。
             if Task.isCancelled || TaskCancellation.isCancellation(error) {
@@ -250,17 +241,9 @@ final class AppViewModel: ObservableObject {
         return Credentials(mioId: trimmedId, password: password)
     }
 
-    private func currentPayload() -> AggregatePayload? {
-        switch state {
-        case .loaded(let payload):
-            return payload
-        case .loading(let previous):
-            return previous
-        case .failed(_, let last):
-            return last
-        case .idle:
-            return nil
-        }
+    private func validateSession(_ generation: UUID) throws {
+        try Task.checkCancellation()
+        guard generation == sessionGeneration else { throw CancellationError() }
     }
 
     private func handleCredentialVisibility(after source: WidgetRefreshService.LoginSource) {

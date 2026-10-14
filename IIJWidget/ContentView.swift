@@ -80,32 +80,9 @@ struct ContentView: View {
         .sensoryFeedback(.error, trigger: errorToastID)
     }
 
-    private var loadedPayload: AggregatePayload? {
-        switch viewModel.state {
-        case .loaded(let payload):
-            return payload
-        case .loading(let previous):
-            return previous
-        case .failed(_, let last):
-            return last
-        case .idle:
-            return nil
-        }
-    }
-
-    private var isLoading: Bool {
-        if case .loading = viewModel.state {
-            return true
-        }
-        return false
-    }
-
-    private var errorMessage: String? {
-        if case .failed(let message, _) = viewModel.state {
-            return message
-        }
-        return nil
-    }
+    private var loadedPayload: AggregatePayload? { viewModel.state.payload }
+    private var isLoading: Bool { viewModel.state.isLoading }
+    private var errorMessage: String? { viewModel.state.errorMessage }
 
     private func evaluateOnboardingPresentation() {
         if !hasCompletedOnboarding && !viewModel.hasStoredCredentials {

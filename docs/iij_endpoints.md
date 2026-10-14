@@ -7,7 +7,7 @@
 
 更新ボタン・引っ張って更新・アプリ自動更新・Widgetの更新はGAPIのみ。
 30日表は利用量タブを開くたびに別途取得する。実行中のGAPI更新があれば、その完了を待ってから取得する。
-月別/日別の切り替えや、利用量タブ内の更新操作では表を取り直さない。
+月別/日別の切り替えや、利用量タブ内の更新操作では表を再取得しない。
 
 | 取得対象 | クライアント / API |
 | --- | --- |
@@ -17,7 +17,7 @@
 | 直近7日・当日実測 | GAPI `/dataTraffic` の `lastSevenDaysDataList` |
 | 過去30日の履歴 | `ThirtyDayUsageClient`: `/auth/login/`, `/api/member/login`, `/service/setup/hdc/viewdailydata/` のGET/POSTのみ |
 
-30日取得のGETはフォームとCSRF取得用で、プレビュー値は使わない。POST表を解析し、GAPI回線IDへ
+30日取得のGETはフォームとCSRFの取得に使い、プレビュー値は使わない。POSTで取得した表を解析し、GAPI回線IDへ
 一意に照合してから日付を正規化する。重複日の高速値はGAPIを優先し、欠損した低速値は30日表で補完する。
 日別が取得できない場合、残量からの推定値は作らない。
 
@@ -33,10 +33,22 @@ GAPIは保存tokenを使用し、401/403のみ資格情報で再ログインす�
 - 請求詳細は`/usageFee`から変換して`billDetails`に保存。詳細を開くたびの再通信を省く。
 - `gapi.payload.v2`と`gapi.widget.snapshot.v2`のみ読み書き。旧形式からの移行はしない。
 - `dailyUsage`はGAPI日次、`thirtyDayUsage`は取得済みの30日表。表示用の`dailyUsageWithHistory`で統合し、通常更新では表を保持する。回線がなくなった場合は対応する表を破棄する。
-- `historyFetchedAt`はGAPI月次・契約・請求の取得日時。Widgetでは同日のGAPI履歴を再利用し、30日表の取得ではGAPIの更新日時を変えない。
+- `historyFetchedAt`はGAPI月次・契約・請求の取得日時。Widgetでは同日のGAPI履歴を再利用するが、月間アラートの正のしきい値が有効な場合は月次も毎回取得する。30日表の取得ではGAPIの更新日時を変えない。
 - 手入力で認証し直す際とログアウト時はtoken / Cookie / キャッシュを破棄し、別アカウントのデータ混在を防ぐ。
 
-## 検証
+## 更新時の使いすぎ通知
+
+通常更新の成功後、今回取得した当日の日次と当月の月次を判定し、UserNotificationsへローカル通知を登録する。
+top-only更新の日次判定にはキャッシュとマージする前の値を使い、月次キャッシュ・30日表・モックは通知に使わない。
+アプリ、Widget、自動化用の`RefreshDataIntent`・`GetDataIntent`は同じ更新・通知処理を使う。
+`GetDataIntent`は取得した`AggregatePayload`をJSONテキストで返す。日時はISO 8601、
+残量・容量・月次はGB、日次はMB。認証情報を含まないが電話番号・契約・請求情報を含むため端末認証を必須にする。
+`thirtyDayUsage`は保持済みキャッシュのみであり、ショートカットから30日表の追加取得は行わない。
+通知済み期間はApp Group内の記録で共有し、ファイルロックで同時更新による二重登録を抑止する。
+未許可・通知登録失敗はデータ取得の成功を取り消さず、登録失敗は更新履歴へ残す。
+手動更新・ショートカットの`ForceUpdate`は`/pastDataTraffic`にも渡す。
+
+## 検証手順
 
 `Tools/IIJFetcher`が本体の共有ソースを直接使用する。`swift test`は匿名化fixtureの検証、
 `swift run IIJFetcher`は標準入力の資格情報を使ったGAPI + 30日表の実通信検証。

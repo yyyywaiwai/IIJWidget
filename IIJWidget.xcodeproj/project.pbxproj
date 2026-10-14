@@ -43,6 +43,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B9D76F81308B6E4B005CE112 /* Widget extension Info.plist */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetExtensionInfo.plist,
+			);
+			target = A567880D2EC1500000C50874 /* RemainingDataWidget */;
+		};
 		A5F3D0CE2F3D0CE0000000CE /* PBXFileSystemSynchronizedBuildFileExceptionSet for Info.plist */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -68,6 +75,9 @@
 		};
 		A567880B2EC1500000C50874 /* RemainingDataWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B9D76F81308B6E4B005CE112 /* Widget extension Info.plist */,
+			);
 			path = RemainingDataWidget;
 			sourceTree = "<group>";
 		};

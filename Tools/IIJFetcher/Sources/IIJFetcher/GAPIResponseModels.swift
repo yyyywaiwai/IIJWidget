@@ -1,0 +1,1 @@
+../../../../Shared/GAPIResponseModels.swift

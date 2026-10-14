@@ -9,50 +9,36 @@ struct RefreshWidgetIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await updateRefreshingState(true)
-        defer {
-            Task { await updateRefreshingState(false) }
-        }
-
-        let refreshService = WidgetRefreshService()
+        let dialog: IntentDialog
         do {
-            // 成功フラグをリセットしてから開始
-            dataStore.setSuccessUntil(nil)
-            _ = dataStore.setRefreshingState(true)
-            await MainActor.run {
-                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
-            }
-
-            _ = try await refreshService.refreshForWidget(
-                forceGAPIUpdate: true
-            )
-            
-            await MainActor.run {
-                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
-            }
+            _ = try await WidgetRefreshService().refreshForWidget(forceGAPIUpdate: true)
             logStore.append(trigger: .widgetManual, result: .success)
-            return .result(dialog: IntentDialog("最新の情報を取得しました"))
+            dialog = IntentDialog("最新の情報を取得しました")
         } catch WidgetRefreshError.missingCredentials {
             logStore.append(
                 trigger: .widgetManual,
                 result: .failure,
                 errorDescription: WidgetRefreshError.missingCredentials.localizedDescription
             )
-            return .result(dialog: IntentDialog("アプリで資格情報を入力してください"))
+            dialog = IntentDialog("アプリで資格情報を入力してください")
         } catch {
             logStore.append(
                 trigger: .widgetManual,
                 result: .failure,
                 errorDescription: error.localizedDescription
             )
-            return .result(dialog: IntentDialog("更新に失敗しました: \(error.localizedDescription)"))
+            dialog = IntentDialog("更新に失敗しました: \(error.localizedDescription)")
         }
+        // 終了処理を非構造化 Task に逃さず、成功・失敗とも状態を保存してから応答する。
+        await updateRefreshingState(false)
+        return .result(dialog: dialog)
     }
 
     private func updateRefreshingState(_ isRefreshing: Bool) async {
         if isRefreshing {
             dataStore.setSuccessUntil(nil)
         }
-        _ = dataStore.setRefreshingState(isRefreshing)
+        dataStore.setRefreshingState(isRefreshing)
         await MainActor.run {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.remainingData)
         }

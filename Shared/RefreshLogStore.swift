@@ -7,6 +7,8 @@ struct RefreshLogEntry: Codable, Identifiable, Equatable {
         case appAutomatic
         case appManual
         case appUsageHistory
+        case shortcut
+        case usageAlert
 
         var displayName: String {
             switch self {
@@ -20,6 +22,10 @@ struct RefreshLogEntry: Codable, Identifiable, Equatable {
                 return "アプリ手動"
             case .appUsageHistory:
                 return "利用量タブ（30日表）"
+            case .shortcut:
+                return "ショートカット"
+            case .usageAlert:
+                return "使いすぎ通知"
             }
         }
     }

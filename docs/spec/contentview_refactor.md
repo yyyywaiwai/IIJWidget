@@ -3,10 +3,10 @@
 ## 背景
 - [x] ContentView がタブ構成、オンボーディング表示、シーンフェーズ監視、フォーカス状態管理など UI ルート全般を単一ファイルで担っている。
 - [x] 同一ファイルに Home/Usage/Billing/Settings 各タブの複雑な UI とビジネスロジックが集約され、AppViewModel への依存が高くなっている。
-- [x] オンボーディング画面群やチャート系ロジック、共通 UI コンポーネントも ContentView.swift に内包され、再利用性とテスト容易性が阻害されている。
+- [x] オンボーディング画面群やチャート系ロジック、共通 UI コンポーネントも ContentView.swift に含まれ、再利用やテストがしにくくなっている。
 
 ## 対応方針
-- [x] ContentView からタブ構造とグローバル UI 制御のみを残し、`MainTabView`（仮称）など別 View へ委譲する。
+- [x] ContentView にタブ構造とグローバル UI 制御のみを残し、`MainTabView`（仮称）など別 View へ委譲する。
 - [x] Field/AppSection などルート固有の型を専用ファイルへ移し、状態管理の責務境界を明示する。
 - [x] Home/Usage/Billing/Settings 各タブを `IIJWidget/Views/Tabs/<TabName>/` 相当のファイルへ分割し、必要なら個別 ViewModel を導入する。
 - [x] 設定タブで扱う資格情報フォーム／データ取得アクション／ログアウト確認を独立した小ビューに分解し、フォーカス管理をローカルに閉じ込める。

@@ -9,7 +9,7 @@ USB 接続した iOS 端末上の MyIIJmio 公式アプリ
 - Mac と端末が USB 接続され、ペアリング・ロック解除済みであること。
 - Mac 側の Frida client と端末側 server に互換性があること。
 
-Mac 側の CLI は、グローバル Python を汚さないよう `uv tool` で導入できます。
+Mac 側の CLI は、グローバル Python 環境に影響を与えないよう `uv tool` で導入できます。
 
 ```sh
 uv tool install --python 3.12 frida-tools
@@ -85,8 +85,8 @@ python3 Tools/frida/capture_authorization.py \
   --timeout 60
 ```
 
-取得待ちになった場合は、公式アプリの「データ量」画面で更新を1回行います。出力ファイルはcurlの
-header-file形式なので、tokenをプロセス引数へ載せずに使用できます。
+取得待ちになった場合は、公式アプリの「データ量」画面で1回更新します。出力ファイルはcurlの
+header-file形式なので、tokenをプロセス引数に含めずに使用できます。
 
 ```sh
 curl -H @/tmp/myiijmio-authorization \

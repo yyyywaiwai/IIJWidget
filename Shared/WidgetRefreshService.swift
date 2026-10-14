@@ -17,10 +17,13 @@ struct WidgetRefreshService {
     private let debugStore = DebugResponseStore.shared
 
     func refreshForWidget(forceGAPIUpdate: Bool = false) async throws -> RefreshOutcome {
-        // 同日のGAPI月次・契約・請求は再利用。30日表はここでは取得しない。
-        let cached = payloadStore.load()
-        let freshHistory = cached.map { UsageDateLabel.calendar.isDateInToday($0.historyFetchedAt) } ?? false
-        return try await refresh(fetchScope: freshHistory && !forceGAPIUpdate ? .topOnly : .full, forceGAPIUpdate: forceGAPIUpdate)
+        // 月間通知の判定には今回取得した月次値が必要。30日表はここでは取得しない。
+        let reuseHistory = PayloadRefreshPolicy.canReuseHistory(
+            cached: payloadStore.load(),
+            forceUpdate: forceGAPIUpdate,
+            needsFreshMonthlyUsage: UsageAlertStore().load().needsFreshMonthlyUsage
+        )
+        return try await refresh(fetchScope: reuseHistory ? .topOnly : .full, forceGAPIUpdate: forceGAPIUpdate)
     }
 
     func refresh(
@@ -40,35 +43,16 @@ struct WidgetRefreshService {
         let stored = allowKeychainFallback ? try credentialStore.load() : nil
         let credentials = manualCredentials ?? stored
         let cached = payloadStore.load()
-        // 初回・回線変更時に不完全なtop-onlyキャッシュを作らない。
-        let useTopOnly = fetchScope == .topOnly && cached != nil
         var source: LoginSource = .gapiToken
-        let fetched: AggregatePayload
+        let fetched: FetchedPayload
 
-        func fetch(_ credentials: Credentials?) async throws -> AggregatePayload {
-            if useTopOnly, let cached {
-                let latest: (top: TrafficSummary, dailyUsage: [DailyUsageService])
-                if let credentials {
-                    latest = try await gapiClient.fetchTop(credentials: credentials, forceUpdate: forceGAPIUpdate)
-                } else {
-                    latest = try await gapiClient.fetchTopUsingExistingSession(forceUpdate: forceGAPIUpdate)
-                }
-                if Set(latest.top.serviceInfoList.map(\.id)) == Set(cached.top.serviceInfoList.map(\.id)) {
-                    return AggregatePayload(
-                        fetchedAt: Date(), top: latest.top, bill: cached.bill,
-                        serviceStatus: cached.serviceStatus, monthlyUsage: cached.monthlyUsage,
-                        dailyUsage: DailyUsageMerger.merge(history: cached.dailyUsage, current: latest.dailyUsage),
-                        billDetails: cached.billDetails, historyFetchedAt: cached.historyFetchedAt
-                    )
-                }
-            }
-            let gapi: AggregatePayload
-            if let credentials {
-                gapi = try await gapiClient.fetchAll(credentials: credentials, forceUpdate: forceGAPIUpdate)
-            } else {
-                gapi = try await gapiClient.fetchAllUsingExistingSession(forceUpdate: forceGAPIUpdate)
-            }
-            return gapi
+        func fetch(_ credentials: Credentials?) async throws -> FetchedPayload {
+            try await fetchPayload(
+                credentials: credentials,
+                cached: cached,
+                scope: fetchScope,
+                forceUpdate: forceGAPIUpdate
+            )
         }
 
         if allowSessionReuse {
@@ -87,12 +71,15 @@ struct WidgetRefreshService {
             source = manualCredentials != nil ? .gapiManual : .gapiKeychain
         }
         // 通常更新はGAPIのみ。取得済みの30日表は現存する回線分だけ保持する。
-        var result = fetched
-        let lineIDs = Set(result.top.serviceInfoList.map(\.id))
-        result.thirtyDayUsage = payloadStore.load()?.thirtyDayUsage?.filter { lineIDs.contains($0.lineID) }
+        let result = PayloadRefreshPolicy.retainingHistory(in: fetched.payload, from: payloadStore.load())
         try Task.checkCancellation()
+        if allowKeychainFallback, try credentialStore.load() != stored { throw CancellationError() }
         if persistManualCredentials, let manualCredentials { try credentialStore.save(manualCredentials) }
-        return finalize(payload: result, source: source)
+        let outcome = finalize(payload: result, source: source)
+        if let accountID = try? MyIIJmioTokenStore().load()?.mioId {
+            await UsageAlertNotifier.notify(payload: result, freshDailyUsage: fetched.freshDailyUsage, accountID: accountID)
+        }
+        return outcome
     }
 
     /// 利用量タブを開いた時だけ取得する。GAPIの更新日時や認証状態は変更しない。
@@ -115,11 +102,44 @@ struct WidgetRefreshService {
         try Task.checkCancellation()
         // 取得中のWidget更新を巻き戻さず、ログアウト・アカウント/回線変更後には保存しない。
         guard var latest = payloadStore.load(),
-              Set(latest.top.serviceInfoList.map(\.id)) == Set(cached.top.serviceInfoList.map(\.id)),
+              PayloadRefreshPolicy.hasSameLines(latest.top, cached.top),
               try credentialStore.load() == credentials else { throw ThirtyDayUsageError.invalidSession }
         latest.thirtyDayUsage = normalized
         payloadStore.save(payload: latest)
         return latest
+    }
+
+    /// Carries freshly fetched values separately from merged history for notification evaluation.
+    private struct FetchedPayload {
+        let payload: AggregatePayload
+        let freshDailyUsage: [DailyUsageService]
+    }
+
+    private func fetchPayload(
+        credentials: Credentials?,
+        cached: AggregatePayload?,
+        scope: FetchScope,
+        forceUpdate: Bool
+    ) async throws -> FetchedPayload {
+        if scope == .topOnly, let cached {
+            let latest: (top: TrafficSummary, dailyUsage: [DailyUsageService])
+            if let credentials {
+                latest = try await gapiClient.fetchTop(credentials: credentials, forceUpdate: forceUpdate)
+            } else {
+                latest = try await gapiClient.fetchTopUsingExistingSession(forceUpdate: forceUpdate)
+            }
+            if let merged = PayloadRefreshPolicy.mergingTop(latest.top, dailyUsage: latest.dailyUsage, into: cached) {
+                return FetchedPayload(payload: merged, freshDailyUsage: latest.dailyUsage)
+            }
+        }
+
+        let payload: AggregatePayload
+        if let credentials {
+            payload = try await gapiClient.fetchAll(credentials: credentials, forceUpdate: forceUpdate)
+        } else {
+            payload = try await gapiClient.fetchAllUsingExistingSession(forceUpdate: forceUpdate)
+        }
+        return FetchedPayload(payload: payload, freshDailyUsage: payload.dailyUsage)
     }
 
     private func finalize(payload: AggregatePayload, source: LoginSource) -> RefreshOutcome {
